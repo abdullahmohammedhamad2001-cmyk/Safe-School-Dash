@@ -11,7 +11,7 @@ import { BsFillCreditCardFill } from "react-icons/bs";
 import { IoDocumentText } from "react-icons/io5";
 import './style.css';
 import Image from 'next/image'
-import defaultLogo from '../images/logo.png'
+import logo from '../images/notification-icon.png'
 
 // Components
 import Main from "../components/main";
@@ -26,8 +26,6 @@ import BillingTemplate from "../components/BillingTemplate";
 const Dashboard = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeSection, setActiveSection] = useState("الرئيسية");
-  const [schoolLogo, setSchoolLogo] = useState(null);
-
   const router = useRouter();
 
   useEffect(() => {
@@ -37,10 +35,6 @@ const Dashboard = () => {
       router.push("/login");
     } else {
       setIsAuthenticated(true);
-      const storedLogo = localStorage.getItem("schoolLogo");
-      if (storedLogo) {
-        setSchoolLogo(storedLogo);
-      }
     }
 
   }, []);
@@ -48,7 +42,7 @@ const Dashboard = () => {
   if (!isAuthenticated) {
     return (
       <div className="loader-container">
-        <ClipLoader color="#3b82f6" size={50} />
+        <ClipLoader color="#8a6115" size={50} />
       </div>
     );
   }
@@ -94,11 +88,12 @@ const Dashboard = () => {
       <aside className="sidebar">
         <div className="sidebar-header">
           <Image
-            src={schoolLogo || defaultLogo}
-            width={50}
-            height={50}
-            alt='logo image'
+            src={logo}
+            width={54}
+            height={54}
+            alt='شعار لوحة تحكم المدارس'
             style={{objectFit:'contain'}}
+            priority
           />
         </div>
 

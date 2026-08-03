@@ -42,6 +42,13 @@ export const GlobalStateProvider = ({ children }) => {
 
     const fetchData = async () => {
       try {
+        const isAll = schoolId === 'ALL';
+
+        const makeQuery = (col, field) =>
+          isAll
+            ? getDocs(collection(DB, col))
+            : getDocs(query(collection(DB, col), where(field, "==", schoolId)));
+
         const [
           studentsSnap,
           teachersSnap,
@@ -50,12 +57,12 @@ export const GlobalStateProvider = ({ children }) => {
           studentsRequestsSnap,
           billsSnap
         ] = await Promise.all([
-          getDocs(query(collection(DB, "students"), where("school_id", "==", schoolId))),
-          getDocs(query(collection(DB, "teachers"), where("school_id", "==", schoolId))),
-          getDocs(query(collection(DB, "employees"), where("school_id", "==", schoolId))),
-          getDocs(query(collection(DB, "classes"), where("schoolId", "==", schoolId))),
-          getDocs(query(collection(DB, "students_requests"), where("school_id", "==", schoolId))),
-          getDocs(query(collection(DB, "student_bills"), where("school_id", "==", schoolId))),
+          makeQuery("students", "school_id"),
+          makeQuery("teachers", "school_id"),
+          makeQuery("employees", "school_id"),
+          makeQuery("classes", "schoolId"),
+          makeQuery("students_requests", "school_id"),
+          makeQuery("student_bills", "school_id"),
         ]);
 
         dispatch({

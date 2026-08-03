@@ -361,7 +361,7 @@ const Employees = () => {
 
         {loading ? (
           <div className="loader">
-            <ClipLoader size={30} color="#3b82f6" />
+            <ClipLoader size={30} color="#8a6115" />
           </div>
         ) : processedEmployees.length === 0 ? (
           <div className="empty">لا يوجد موظفين</div>

@@ -321,7 +321,7 @@ const StudentsRequests = () => {
 
         {loading ? (
           <div className="loader">
-            <ClipLoader size={30} color="#3b82f6" />
+            <ClipLoader size={30} color="#8a6115" />
           </div>
         ) : filteredStudentsRequests.length === 0 ? (
           <div className="empty">لا يوجد طلبات تسجيل</div>

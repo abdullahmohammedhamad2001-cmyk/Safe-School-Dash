@@ -8,6 +8,7 @@ import ClipLoader from "react-spinners/ClipLoader";
 import { FiEdit2 } from "react-icons/fi";
 import "../app/style.css";
 
+
 const GRADES = [
   "أول ابتدائي",
   "ثاني ابتدائي",

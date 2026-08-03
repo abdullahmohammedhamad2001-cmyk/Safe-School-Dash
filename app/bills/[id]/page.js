@@ -258,7 +258,7 @@ const BillingDetails = () => {
 
             element.innerHTML = `
                 <div style="direction:rtl;font-family:Arial;padding:20px;">
-                    <h2 style="text-align:center;color:#2563eb;">وصل دفع</h2>
+                    <h2 style="text-align:center;color:#8a6115;">وصل دفع</h2>
                     <p style="text-align:center;">${schoolName}</p>
 
                     <div style="border:1px solid #ddd;border-radius:10px;padding:15px;margin-top:20px;">

@@ -762,7 +762,7 @@ const StudentDetails = () => {
 
                                                 <button
                                                     className="result-box-edit-row-save-btn"
-                                                    style={{ backgroundColor: "#3b82f6", color: "#fff", marginLeft: 10 }}
+                                                    style={{ backgroundColor: "#8a6115", color: "#fff", marginLeft: 10 }}
                                                     onClick={() => handleSaveField(field, record)}
                                                 >
                                                     {loadingSave ? <ClipLoader size={12} color="#fff"/> : "حفظ"}

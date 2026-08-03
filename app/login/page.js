@@ -6,7 +6,7 @@ import { collection,getDocs,query,where } from "firebase/firestore"
 import { DB } from '../../firebaseConfig'
 import ClipLoader from "react-spinners/ClipLoader"
 import Image from 'next/image'
-import logo_image from '../../images/logo.png'
+import logo_image from '../../images/notification-icon.png'
 
 const Login = () => {
   const [username,setUsername] = useState('')
@@ -21,35 +21,52 @@ const Login = () => {
     setLoading(true)
 
     try {
-      // Query Firestore for admin credentials
-      const q = query(
+      // Query schoolAdmins first
+      const q1 = query(
         collection(DB, "schoolAdmins"),
         where("username", "==", username),
         where("password", "==", password)
       );
+      const snap1 = await getDocs(q1);
 
-      const querySnapshot = await getDocs(q);
-
-      if (!querySnapshot.empty) {
-        const userData = querySnapshot.docs[0].data()
-
+      if (!snap1.empty) {
+        const userData = snap1.docs[0].data()
         localStorage.setItem('adminLoggedIn', true)
         localStorage.setItem('adminDahboardName', userData?.name)
         localStorage.setItem('adminSchoolID', userData?.school_id)
         localStorage.setItem('adminSchoolName', userData?.school)
         localStorage.setItem('schoolLogo', userData?.school_logo)
         localStorage.setItem('schoolCountry', userData?.country)
-
-        setTimeout(() => {
-          router.push("/");
-        }, 300);
-
-      } else {
-        setError('يرجى التثبت من المعلومات المدرجة')
+        localStorage.setItem('adminRole', userData?.role || 'admin')
+        setTimeout(() => { router.push("/"); }, 300);
+        return;
       }
+
+      // Fallback: check Safe Team admins
+      const q2 = query(
+        collection(DB, "admins"),
+        where("username", "==", username),
+        where("password", "==", password)
+      );
+      const snap2 = await getDocs(q2);
+
+      if (!snap2.empty) {
+        const userData = snap2.docs[0].data()
+        localStorage.setItem('adminLoggedIn', true)
+        localStorage.setItem('adminDahboardName', userData?.dashboard_name)
+        localStorage.setItem('adminSchoolID', 'ALL')
+        localStorage.setItem('adminSchoolName', 'Safe Team')
+        localStorage.setItem('schoolLogo', '')
+        localStorage.setItem('schoolCountry', 'iraq')
+        localStorage.setItem('adminRole', 'safe_team')
+        setTimeout(() => { router.push("/"); }, 300);
+        return;
+      }
+
+      setError('يرجى التثبت من المعلومات المدرجة')
     } catch (err) {
       setError('يرجى التثبت من المعلومات المدرجة')
-    }finally {
+    } finally {
       setLoading(false)
     }
   };
@@ -60,9 +77,10 @@ const Login = () => {
         <div className="login-logo">
           <Image
             src={logo_image}
-            width={70}
-            height={70}
-            alt="logo"
+            width={88}
+            height={88}
+            alt="شعار لوحة تحكم المدارس"
+            priority
           />
         </div>
 
