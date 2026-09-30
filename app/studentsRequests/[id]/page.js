@@ -109,6 +109,7 @@ const StudentRequestDetails = () => {
 
             const templateDoc = templatesSnap.docs[0];
             const template = templateDoc.data();
+            const noBilling = template.is_empty || !template.installments?.length;
 
             // 🔹 fetch conversations BEFORE transaction
             const conversationsSnap = await getDocs(
@@ -185,14 +186,14 @@ const StudentRequestDetails = () => {
                 // 🔹 bills
                 const gradeTotal = template.grade_amounts?.[selectedClass.grade];
 
-                if (!gradeTotal) throw new Error("GRADE_AMOUNT_NOT_FOUND");
+                if (!noBilling && !gradeTotal) throw new Error("GRADE_AMOUNT_NOT_FOUND");
 
                 const numberOfPayments = template.number_of_payments;
                 const totalAmount = Number(gradeTotal);
                 const baseAmount = Math.floor(totalAmount / numberOfPayments);
                 const remainder = totalAmount % numberOfPayments;
 
-                template.installments.forEach((inst, index) => {
+                if (!noBilling) template.installments.forEach((inst, index) => {
                     const billRef = doc(collection(DB, "student_bills"));
 
                     const adjustedAmount = index === 0 ? baseAmount + remainder : baseAmount;

@@ -25,6 +25,11 @@ const GOLD_LIGHT = "#d4af37";
 
 const Globe = () => {
   const canvasRef = useRef(null);
+  const [logo, setLogo] = useState("");
+  useEffect(() => {
+    const stored = localStorage.getItem("schoolLogo");
+    if (stored && stored !== "undefined" && stored !== "null") setLogo(stored);
+  }, []);
   useEffect(() => {
     let phi = 0;
     const globe = createGlobe(canvasRef.current, {
@@ -51,7 +56,12 @@ const Globe = () => {
   return (
     <div className="globe-canvas-wrap">
       <canvas ref={canvasRef} className="globe-canvas" width={320} height={320} />
-      <span className="globe-letter">S</span>
+      {logo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={logo} alt="شعار المدرسة" className="globe-logo" onError={() => setLogo("")} />
+      ) : (
+        <span className="globe-letter">S</span>
+      )}
     </div>
   );
 };

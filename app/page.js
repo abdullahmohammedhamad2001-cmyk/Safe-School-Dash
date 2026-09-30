@@ -26,10 +26,13 @@ import BillingTemplate from "../components/BillingTemplate";
 const Dashboard = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeSection, setActiveSection] = useState("الرئيسية");
+  const [schoolLogo, setSchoolLogo] = useState("");
   const router = useRouter();
 
   useEffect(() => {
     const adminLoggedIn = localStorage.getItem("adminLoggedIn");
+    const storedLogo = localStorage.getItem("schoolLogo");
+    if (storedLogo && storedLogo !== "undefined" && storedLogo !== "null") setSchoolLogo(storedLogo);
 
     if (!adminLoggedIn) {
       router.push("/login");
@@ -87,14 +90,26 @@ const Dashboard = () => {
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-header">
-          <Image
-            src={logo}
-            width={54}
-            height={54}
-            alt='شعار لوحة تحكم المدارس'
-            style={{objectFit:'contain'}}
-            priority
-          />
+          {schoolLogo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={schoolLogo}
+              width={54}
+              height={54}
+              alt='شعار المدرسة'
+              style={{objectFit:'contain'}}
+              onError={() => setSchoolLogo("")}
+            />
+          ) : (
+            <Image
+              src={logo}
+              width={54}
+              height={54}
+              alt='شعار لوحة تحكم المدارس'
+              style={{objectFit:'contain'}}
+              priority
+            />
+          )}
         </div>
 
         <div className="sidebar-links">

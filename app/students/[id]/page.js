@@ -267,6 +267,7 @@ const StudentDetails = () => {
 
                 const templateDoc = templatesSnap.docs[0];
                 const template = templateDoc.data();
+                const noBilling = template.is_empty || !template.installments?.length;
 
                 await runTransaction(DB, async (transaction) => {
 
@@ -306,14 +307,14 @@ const StudentDetails = () => {
                     const gradeName = student.class_grade;
                     const gradeTotal = template.grade_amounts?.[gradeName];
 
-                    if (!gradeTotal) throw new Error("GRADE_AMOUNT_NOT_FOUND");
+                    if (!noBilling && !gradeTotal) throw new Error("GRADE_AMOUNT_NOT_FOUND");
 
                     const numberOfPayments = template.number_of_payments;
                     const totalAmount = Number(gradeTotal);
                     const baseAmount = Math.floor(totalAmount / numberOfPayments);
                     const remainder = totalAmount % numberOfPayments;
 
-                    template.installments.forEach((inst, index) => {
+                    if (!noBilling) template.installments.forEach((inst, index) => {
                         const billRef = doc(collection(DB, "student_bills"));
 
                         const amount = index === 0 ? baseAmount + remainder : baseAmount;
@@ -412,6 +413,7 @@ const StudentDetails = () => {
 
             const templateDoc = templatesSnap.docs[0];
             const template = templateDoc.data();
+            const noBilling = template.is_empty || !template.installments?.length;
 
             // 🔹 Conversations
             const oldConvSnap = await getDocs(
@@ -475,14 +477,14 @@ const StudentDetails = () => {
 
                 // ✅ Bills
                 const gradeTotal = template.grade_amounts?.[nextClass.grade];
-                if (!gradeTotal) throw new Error("GRADE_AMOUNT_NOT_FOUND");
+                if (!noBilling && !gradeTotal) throw new Error("GRADE_AMOUNT_NOT_FOUND");
 
                 const numberOfPayments = template.number_of_payments;
                 const totalAmount = Number(gradeTotal);
                 const baseAmount = Math.floor(totalAmount / numberOfPayments);
                 const remainder = totalAmount % numberOfPayments;
 
-                template.installments.forEach((inst, index) => {
+                if (!noBilling) template.installments.forEach((inst, index) => {
                     const billRef = doc(collection(DB, "student_bills"));
 
                     const amount = index === 0 ? baseAmount + remainder : baseAmount;

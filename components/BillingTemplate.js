@@ -39,6 +39,11 @@ const EDUCATION_LEVELS = {
   ],
 };
 
+// قيم شكلية تتجاوز فحص التسعير في نسخ التطبيق القديمة دون إنشاء أي فاتورة (الأقساط فارغة)
+const EMPTY_TEMPLATE_AMOUNTS = Object.fromEntries(
+  Object.values(EDUCATION_LEVELS).flat().map((g) => [g, 1])
+);
+
 const BillingTemplatesPage = () => {
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +64,9 @@ const BillingTemplatesPage = () => {
   const [dueDates, setDueDates] = useState([]);
   const [gradeAmounts, setGradeAmounts] = useState({});
   const [saving, setSaving] = useState(false);
+  const [schoolType, setSchoolType] = useState("private");
+  const [isEmpty, setIsEmpty] = useState(false);
+  const lastStep = isEmpty ? 0 : 4;
 
   const [expandedLevels, setExpandedLevels] = useState({
    ابتدائي: true,
@@ -106,6 +114,28 @@ const BillingTemplatesPage = () => {
         id: d.id,
         ...d.data(),
       }));
+
+      // ترقية القوالب الفارغة المحفوظة بالصيغة القديمة لتعمل مع نسخ التطبيق القديمة
+      await Promise.all(
+        list
+          .filter((t) => {
+            const empty = t.is_empty || !t.installments?.length;
+            const hasAmounts = Object.keys(EMPTY_TEMPLATE_AMOUNTS).every(
+              (g) => t.grade_amounts?.[g]
+            );
+            return empty && !hasAmounts;
+          })
+          .map(async (t) => {
+            const patch = {
+              is_empty: true,
+              number_of_payments: 1,
+              grade_amounts: EMPTY_TEMPLATE_AMOUNTS,
+              installments: [],
+            };
+            await updateDoc(doc(DB, "billing_templates", t.id), patch);
+            Object.assign(t, patch);
+          })
+      );
 
       setTemplates(list);
 
@@ -168,21 +198,23 @@ const BillingTemplatesPage = () => {
         return;
       }
 
-      const hasEmptyDates = dueDates.some((d) => !d);
-      if (hasEmptyDates) {
-        alert("يرجى تحديد تاريخ كل قسط");
-        return;
-      }
+      if (!isEmpty) {
+        const hasEmptyDates = dueDates.some((d) => !d);
+        if (hasEmptyDates) {
+          alert("يرجى تحديد تاريخ كل قسط");
+          return;
+        }
 
-      const allGrades = Object.values(EDUCATION_LEVELS).flat();
+        const allGrades = Object.values(EDUCATION_LEVELS).flat();
 
-      const hasInvalid = allGrades.some(
-        (g) => !gradeAmounts[g] || Number(gradeAmounts[g]) <= 0
-      );
+        const hasInvalid = allGrades.some(
+          (g) => !gradeAmounts[g] || Number(gradeAmounts[g]) <= 0
+        );
 
-      if (hasInvalid) {
-        alert("يرجى إدخال المبلغ لكل الصفوف");
-        return;
+        if (hasInvalid) {
+          alert("يرجى إدخال المبلغ لكل الصفوف");
+          return;
+        }
       }
 
       const schoolId = localStorage.getItem("adminSchoolID");
@@ -190,11 +222,13 @@ const BillingTemplatesPage = () => {
       await addDoc(collection(DB, "billing_templates"), {
         school_id: schoolId,
         academic_year: academicYear,
-        number_of_payments: quantity,
-        grade_amounts: Object.fromEntries(
+        school_type: schoolType,
+        is_empty: isEmpty,
+        number_of_payments: isEmpty ? 1 : quantity,
+        grade_amounts: isEmpty ? EMPTY_TEMPLATE_AMOUNTS : Object.fromEntries(
           Object.entries(gradeAmounts).map(([k, v]) => [k, Number(v)])
         ),
-        installments: dueDates.map((d, i) => ({
+        installments: isEmpty ? [] : dueDates.map((d, i) => ({
           index: i + 1,
           due_date: Timestamp.fromDate(new Date(d)),
         })),
@@ -217,6 +251,8 @@ const BillingTemplatesPage = () => {
 
   //Close create modal
   const closeCreateModal = () => {
+    setSchoolType("private");
+    setIsEmpty(false);
     setEditingTemplate(null); 
     setStep(0);
     setQuantity(1);
@@ -229,18 +265,21 @@ const BillingTemplatesPage = () => {
   useEffect(() => {
     if (!editingTemplate) return;
 
-    setAcademicYear(editingTemplate.academic_year);
-    setQuantity(editingTemplate.number_of_payments);
-
-    setDueDates(
-      editingTemplate.installments.map(inst =>
-        new Date(inst.due_date.seconds * 1000)
-          .toISOString()
-          .split("T")[0]
-      )
+    const qty = editingTemplate.number_of_payments || 1;
+    const dates = (editingTemplate.installments || []).map(inst =>
+      new Date(inst.due_date.seconds * 1000)
+        .toISOString()
+        .split("T")[0]
     );
 
-    setGradeAmounts(editingTemplate.grade_amounts);
+    const empty = !!editingTemplate.is_empty || dates.length === 0;
+
+    setAcademicYear(editingTemplate.academic_year);
+    setSchoolType(editingTemplate.school_type || "private");
+    setIsEmpty(empty);
+    setQuantity(qty);
+    setDueDates(Array.from({ length: qty }, (_, i) => dates[i] || ""));
+    setGradeAmounts(empty ? {} : editingTemplate.grade_amounts || {});
 
   }, [editingTemplate]);
 
@@ -295,11 +334,13 @@ const BillingTemplatesPage = () => {
         const ref = doc(DB, "billing_templates", editingTemplate.id);
 
         await updateDoc(ref, {
-          number_of_payments: quantity,
-          grade_amounts: Object.fromEntries(
+          school_type: schoolType,
+          is_empty: isEmpty,
+          number_of_payments: isEmpty ? 1 : quantity,
+          grade_amounts: isEmpty ? EMPTY_TEMPLATE_AMOUNTS : Object.fromEntries(
             Object.entries(gradeAmounts).map(([k, v]) => [k, Number(v)])
           ),
-          installments: dueDates.map((d, i) => ({
+          installments: isEmpty ? [] : dueDates.map((d, i) => ({
             index: i + 1,
             due_date: Timestamp.fromDate(new Date(d)),
           })),
@@ -321,6 +362,8 @@ const BillingTemplatesPage = () => {
   
   //Close edit modal
   const closeEditModal = () => {
+    setSchoolType("private");
+    setIsEmpty(false);
     setEditingTemplate(null); 
     setStep(0);
     setQuantity(1);
@@ -355,7 +398,13 @@ const BillingTemplatesPage = () => {
         <div className="template-card-header">
           <div className="template-card-header-first-box">
             <h4>{t.academic_year}</h4>
-            <p className="template-card-sub">عدد الاقساط : {t.number_of_payments}</p>
+            <p className="template-card-sub">
+              {t.school_type === "government" ? "مدرسة حكومية" : "مدرسة أهلية"}
+              {" - "}
+              {t.is_empty || !t.installments?.length
+                ? "قالب فارغ (بدون فواتير)"
+                : `عدد الاقساط : ${t.number_of_payments}`}
+            </p>
           </div>
           <div
             className="edit-template-btn"
@@ -383,6 +432,8 @@ const BillingTemplatesPage = () => {
         <div className="template-expanded">
           {/* LEVELS */}
           {Object.entries(EDUCATION_LEVELS).map(([level, grades]) => {
+            if (t.is_empty || !t.installments?.length) return null;
+
             const hasData = grades.some(
               g => t.grade_amounts?.[g] !== undefined
             );
@@ -445,6 +496,30 @@ const BillingTemplatesPage = () => {
     );
   };
 
+  const renderTypeFields = () => (
+    <div className="installement-step-box" style={{ marginBottom: 12 }}>
+      <p>نوع المدرسة</p>
+      <select
+        value={schoolType}
+        onChange={(e) => {
+          setSchoolType(e.target.value);
+          setIsEmpty(e.target.value === "government");
+        }}
+      >
+        <option value="private">أهلية</option>
+        <option value="government">حكومية</option>
+      </select>
+      <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
+        <input
+          type="checkbox"
+          checked={isEmpty}
+          onChange={(e) => setIsEmpty(e.target.checked)}
+        />
+        قالب فارغ (بدون أقساط)
+      </label>
+    </div>
+  );
+
   return (
     <div className="students-container">
 
@@ -495,12 +570,14 @@ const BillingTemplatesPage = () => {
         <div className="template-modal">
 
           <div className="steps">
-            {["السنة", "الأقساط", "التواريخ", "المبالغ", "مراجعة"].map((s, i) => (
+            {(isEmpty ? ["السنة"] : ["السنة", "الأقساط", "التواريخ", "المبالغ", "مراجعة"]).map((s, i) => (
               <div key={i} className={`step ${step === i ? "active" : ""}`}>
                 {s}
               </div>
             ))}
           </div>
+
+          {step === 0 && renderTypeFields()}
 
           <div className="template-modal-content">
             {step === 0 && (
@@ -674,7 +751,7 @@ const BillingTemplatesPage = () => {
           <div className="modal-actions">
             {step > 0 && <button className='modal-actions-button outline-button' onClick={() => setStep(s => s - 1)}>رجوع</button>}
 
-            {step < 4 ? (
+            {step < lastStep ? (
               <button 
                 className='modal-actions-button submit-button' 
                 onClick={() => {
@@ -706,12 +783,14 @@ const BillingTemplatesPage = () => {
         >
           <div className="template-modal">
             <div className="steps">
-              {["السنة", "الأقساط", "التواريخ", "المبالغ", "مراجعة"].map((s, i) => (
+              {(isEmpty ? ["السنة"] : ["السنة", "الأقساط", "التواريخ", "المبالغ", "مراجعة"]).map((s, i) => (
                 <div key={i} className={`step ${step === i ? "active" : ""}`}>
                   {s}
                 </div>
               ))}
             </div>
+
+            {step === 0 && renderTypeFields()}
 
           <div className="template-modal-content">
             {step === 0 && (
@@ -895,7 +974,7 @@ const BillingTemplatesPage = () => {
           <div className="modal-actions">
             {step > 0 && <button className='modal-actions-button outline-button' onClick={() => setStep(s => s - 1)}>رجوع</button>}
 
-            {step < 4 ? (
+            {step < lastStep ? (
               <button 
                 className='modal-actions-button submit-button' 
                 onClick={() => {
