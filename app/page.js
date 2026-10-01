@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { doc, getDoc } from "firebase/firestore";
+import { DB } from "../firebaseConfig";
 import ClipLoader from "react-spinners/ClipLoader";
 import {MdDashboard,MdPeople,MdSchool} from "react-icons/md";
 import { PiBagSimpleFill } from "react-icons/pi";
@@ -33,16 +35,34 @@ const Dashboard = () => {
   const router = useRouter();
 
   useEffect(() => {
-    const adminLoggedIn = localStorage.getItem("adminLoggedIn");
-    const storedLogo = localStorage.getItem("schoolLogo");
-    if (storedLogo && storedLogo !== "undefined" && storedLogo !== "null") setSchoolLogo(storedLogo);
+    const init = async () => {
+      if (!localStorage.getItem("adminLoggedIn")) {
+        router.push("/login");
+        return;
+      }
 
-    if (!adminLoggedIn) {
-      router.push("/login");
-    } else {
+      // Name and logo are cached at login, so pick up any change made since
+      const schoolId = localStorage.getItem("adminSchoolID");
+      if (schoolId && schoolId !== "ALL") {
+        try {
+          const snap = await getDoc(doc(DB, "schools", schoolId));
+          if (snap.exists()) {
+            const { name, logo_url } = snap.data();
+            if (name) localStorage.setItem("adminSchoolName", name);
+            if (logo_url) localStorage.setItem("schoolLogo", logo_url);
+          }
+        } catch (e) {
+          console.log(e);
+        }
+      }
+
+      const storedLogo = localStorage.getItem("schoolLogo");
+      if (storedLogo && storedLogo !== "undefined" && storedLogo !== "null") setSchoolLogo(storedLogo);
+
       setIsAuthenticated(true);
-    }
+    };
 
+    init();
   }, []);
 
   if (!isAuthenticated) {
