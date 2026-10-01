@@ -9,6 +9,7 @@ import ClipLoader from "react-spinners/ClipLoader";
 import { Modal } from "antd";
 import { FaFemale, FaMale } from "react-icons/fa";
 import { FiEdit2 } from "react-icons/fi";
+import { sortClasses } from "../../../lib/sortClasses";
 import "../../style.css";
 
 const StudentDetails = () => {
@@ -25,7 +26,7 @@ const StudentDetails = () => {
     const [editSex, setEditSex] = useState("male");
     const [editBirthDate, setEditBirthDate] = useState("");
     const [editPhone, setEditPhone] = useState("");
-    const [editClassName, setEditClassName] = useState("");
+    const [editClassId, setEditClassId] = useState("");
     const [loadingEdit, setLoadingEdit] = useState(false);
     const [editingField, setEditingField] = useState(null);
     const [tempValue, setTempValue] = useState("");
@@ -553,11 +554,13 @@ const StudentDetails = () => {
         setEditParentName(student.parent_name || "");
         setEditSex(student.sex || "male");
 
-        // 🔥 convert timestamp → input date
+        // Local date parts: toISOString() shifts the day back in UTC+ time zones
         if (student.birth_date) {
             const d = student.birth_date.toDate();
-            const formatted = d.toISOString().split("T")[0];
-            setEditBirthDate(formatted);
+            const pad = (n) => String(n).padStart(2, "0");
+            setEditBirthDate(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+        } else {
+            setEditBirthDate("");
         }
 
         let rawPhone = student.phone_number || "";
@@ -568,7 +571,7 @@ const StudentDetails = () => {
 
         setEditPhone(rawPhone);
 
-        setEditClassName(student.class_name || "");
+        setEditClassId(student.class_id || "");
 
         setOpenEditModal(true);
     };
@@ -588,8 +591,8 @@ const StudentDetails = () => {
         try {
             setLoadingEdit(true);
 
-            if (!editName || !editParentName || !editPhone || !editBirthDate) {
-                alert("يرجى إدخال جميع البيانات");
+            if (!editName.trim() || !editPhone || !editBirthDate) {
+                alert("يرجى إدخال الاسم ورقم الهاتف وتاريخ الميلاد");
                 return;
             }
 
@@ -599,14 +602,76 @@ const StudentDetails = () => {
                 return;
             }
 
-            const birthDate = Timestamp.fromDate(new Date(editBirthDate));
+            const [y, m, d] = editBirthDate.split("-").map(Number);
+            const birthDate = Timestamp.fromDate(new Date(y, m - 1, d));
 
-            await updateDoc(doc(DB, "students", editingStudent.id), {
+            const newClass = classes.find((c) => c.id === editClassId);
+            const classChanged = !!newClass && newClass.id !== editingStudent.class_id;
+
+            const updates = {
                 name: editName.trim(),
                 parent_name: editParentName.trim(),
                 phone_number: `+964${editPhone}`,
                 sex: editSex,
                 birth_date: birthDate,
+                birth_date_estimated: false,
+                updated_at: Timestamp.now(),
+            };
+
+            if (!classChanged) {
+                await updateDoc(doc(DB, "students", editingStudent.id), updates);
+                alert("تم تحديث بيانات الطالب");
+                setOpenEditModal(false);
+                return;
+            }
+
+            // Bills are priced per grade, so a student with bills cannot be moved silently
+            const billsSnap = await getDocs(
+                query(collection(DB, "student_bills"), where("student_id", "==", editingStudent.id))
+            );
+            if (!billsSnap.empty) {
+                alert("لا يمكن تغيير الصف لطالب لديه فواتير");
+                return;
+            }
+
+            const convQuery = (classId) => getDocs(
+                query(
+                    collection(DB, "conversations"),
+                    where("school_id", "==", editingStudent.school_id),
+                    where("class_id", "==", classId),
+                    where("scope", "==", "class_subject")
+                )
+            );
+            const [oldConvSnap, newConvSnap] = await Promise.all([
+                convQuery(editingStudent.class_id),
+                convQuery(newClass.id),
+            ]);
+
+            const currentRecord = academicRecords.find(
+                (r) => r.id && r.academic_year === getAcademicYearAuto()
+            );
+
+            await runTransaction(DB, async (transaction) => {
+                transaction.update(doc(DB, "students", editingStudent.id), {
+                    ...updates,
+                    class_id: newClass.id,
+                    class_name: newClass.name,
+                    class_grade: newClass.grade,
+                });
+
+                if (currentRecord) {
+                    transaction.update(doc(DB, "academic_records", currentRecord.id), {
+                        class_id: newClass.id,
+                        class_name: newClass.name,
+                    });
+                }
+
+                oldConvSnap.docs.forEach((c) => {
+                    transaction.update(c.ref, { participant_ids: arrayRemove(editingStudent.id) });
+                });
+                newConvSnap.docs.forEach((c) => {
+                    transaction.update(c.ref, { participant_ids: arrayUnion(editingStudent.id) });
+                });
             });
 
             alert("تم تحديث بيانات الطالب");
@@ -671,7 +736,16 @@ const StudentDetails = () => {
                     account_deleted: true,
                     deleted_at: Timestamp.now(),
                     deleted_by: adminId,
+                    line_id: null,
+                    driver_id: null,
                 });
+
+                //Free the seat on the transport line
+                if (studentData.line_id) {
+                    transaction.update(doc(DB, "lines", studentData.line_id), {
+                        riders: arrayRemove(studentID),
+                    });
+                }
 
             });
 
@@ -963,7 +1037,15 @@ const StudentDetails = () => {
                         onChange={(e) => setEditPhone(e.target.value.replace(/[^0-9]/g, ""))}
                     />
 
-                    <input value={editClassName} disabled />
+                    {editingStudent?.birth_date_estimated && (
+                        <p className="modal-hint">تاريخ الميلاد الحالي تقديري، يرجى إدخال التاريخ الصحيح.</p>
+                    )}
+
+                    <select value={editClassId} onChange={(e) => setEditClassId(e.target.value)}>
+                        {sortClasses(classes).map((c) => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                    </select>
 
                     {loadingEdit ? (
                         <div className="btn-loading">

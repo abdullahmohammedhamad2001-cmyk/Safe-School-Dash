@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import {collection,addDoc,Timestamp,getDocs,query,where} from "firebase/firestore";
+import {collection,addDoc,Timestamp,getDocs,query,where,doc,writeBatch} from "firebase/firestore";
 import { DB } from "../firebaseConfig";
 import { useGlobalState } from "../globalState";
 import { useRouter } from "next/navigation";
 import ClipLoader from "react-spinners/ClipLoader";
+import { FaRegTrashCan } from "react-icons/fa6";
 import { sortClasses, EDUCATION_ORDER, GRADE_ORDER } from "../lib/sortClasses";
 import { Modal } from "antd";
 import "../app/style.css";
@@ -22,8 +23,7 @@ const Classes = () => {
   const [classSection, setClassSection] = useState("");
   const [classSpecialization, setClassSpecialization] = useState("");
   const [loadingCreate, setLoadingCreate] = useState(false);
-
-  // ✅ Sort classes
+  const [deletingClassId, setDeletingClassId] = useState(null);
   const sortedClasses = useMemo(() => {
     return sortClasses(classes);
   }, [classes]);
@@ -224,6 +224,37 @@ const Classes = () => {
     }
   };
 
+  const handleDeleteClass = async (cls) => {
+    if ((studentCountMap[cls.id] || 0) > 0) {
+      alert("لا يمكن حذف صف يحتوي على طلاب. انقل الطلاب إلى صف آخر أولاً.");
+      return;
+    }
+
+    if (!confirm(`هل أنت متأكد من حذف الصف "${cls.name}"؟ سيتم حذف جدوله ومحادثاته.`)) return;
+
+    try {
+      setDeletingClassId(cls.id);
+
+      const convSnap = await getDocs(
+        query(
+          collection(DB, "conversations"),
+          where("school_id", "==", cls.schoolId),
+          where("class_id", "==", cls.id)
+        )
+      );
+
+      const batch = writeBatch(DB);
+      convSnap.docs.forEach((d) => batch.update(d.ref, { archived: true }));
+      batch.delete(doc(DB, "classes", cls.id));
+      await batch.commit();
+    } catch (e) {
+      console.error(e);
+      alert("فشل حذف الصف");
+    } finally {
+      setDeletingClassId(null);
+    }
+  };
+
   return (
     <div className="students-container">
       <div className="students-header">
@@ -339,6 +370,7 @@ const Classes = () => {
           <span>الصف</span>
           <span>الشعبة</span>
           <span>عدد الطلاب</span>
+          <span>حذف</span>
         </div>
 
         {loading ? (
@@ -362,6 +394,19 @@ const Classes = () => {
                 <div className="student-count-badge">
                   {studentCountMap[cls.id] || 0}
                 </div>
+              </span>
+              <span>
+                <button
+                  className="class-delete-btn"
+                  title="حذف الصف"
+                  disabled={deletingClassId === cls.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteClass(cls);
+                  }}
+                >
+                  {deletingClassId === cls.id ? <ClipLoader size={14} color="#ef4444" /> : <FaRegTrashCan size={15} />}
+                </button>
               </span>
             </div>
           ))

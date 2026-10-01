@@ -44,7 +44,7 @@ const DIRECTIONS = [
 ];
 
 const TransportReport = () => {
-  const { lines, drivers, students, classes, loading } = useGlobalState();
+  const { lines, drivers, students, loading } = useGlobalState();
 
   const reportRef = useRef(null);
   const [schoolName, setSchoolName] = useState("");
@@ -163,11 +163,6 @@ const TransportReport = () => {
         `${a.name} ${a.parent_name}`.localeCompare(`${b.name} ${b.parent_name}`, "ar")
       );
   }, [students, line]);
-
-  const classById = useMemo(
-    () => new Map(classes.map((c) => [c.id, c])),
-    [classes]
-  );
 
   const subscriptionsTotal = useMemo(
     () => lineStudents.reduce((sum, s) => sum + (Number(s.subscription_amount) || 0), 0),
@@ -359,7 +354,7 @@ const TransportReport = () => {
                 <tr>
                   <th>نوع السيارة</th>
                   <td>{driver?.car_type || line?.car_type || "-"}</td>
-                  <th>رقم السيارة</th>
+                  <th>لوحة السيارة</th>
                   <td>{driver?.car_plate || "-"}</td>
                 </tr>
                 <tr>
@@ -393,22 +388,18 @@ const TransportReport = () => {
 
             <table className="report-students-table">
               <colgroup>
-                <col style={{ width: "4%" }} />
-                <col style={{ width: "17%" }} />
-                <col style={{ width: "11%" }} />
-                <col style={{ width: "7%" }} />
-                <col style={{ width: "20%" }} />
-                <col style={{ width: "12%" }} />
-                <col style={{ width: "11%" }} />
-                <col style={{ width: "9%" }} />
-                <col style={{ width: "9%" }} />
+                <col style={{ width: "5%" }} />
+                <col style={{ width: "22%" }} />
+                <col style={{ width: "25%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "10%" }} />
               </colgroup>
               <thead>
                 <tr>
                   <th>ت</th>
                   <th>اسم الطالب</th>
-                  <th>الصف / المرحلة</th>
-                  <th>الشعبة</th>
                   <th>عنوان السكن</th>
                   <th>رقم ولي الأمر</th>
                   <th>الاشتراك الشهري</th>
@@ -419,15 +410,13 @@ const TransportReport = () => {
               <tbody>
                 {lineStudents.length === 0 ? (
                   <tr>
-                    <td colSpan={9}>لا يوجد طلاب في هذا الخط</td>
+                    <td colSpan={7}>لا يوجد طلاب في هذا الخط</td>
                   </tr>
                 ) : (
                   lineStudents.map((s, index) => (
                     <tr key={s.id}>
                       <td>{index + 1}</td>
                       <td>{s.name} {s.parent_name}</td>
-                      <td>{s.class_grade || "-"}</td>
-                      <td>{classById.get(s.class_id)?.section || "-"}</td>
                       <td>{s.home_address || "-"}</td>
                       <td className="phone-number">{toLocalPhone(s.phone_number)}</td>
                       <td>

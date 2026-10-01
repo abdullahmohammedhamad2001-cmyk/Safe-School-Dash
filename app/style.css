@@ -798,7 +798,7 @@
 /* Classes Section */
 .classes-table-header {
   display: grid;
-  grid-template-columns: 1.5fr 3fr 1.5fr 1.5fr;
+  grid-template-columns: 1.5fr 3fr 1.5fr 1.5fr 1fr;
   background: #f3f4f6;
   padding: 12px;
   font-weight: bold;
@@ -811,7 +811,7 @@
 }
 .classes-table-row {
   display: grid;
-  grid-template-columns: 1.5fr 3fr 1.5fr 1.5fr;
+  grid-template-columns: 1.5fr 3fr 1.5fr 1.5fr 1fr;
   align-items: center;
   padding: 12px;
   border-top: 1px solid #e5e7eb;
@@ -820,6 +820,17 @@
 }
 .classes-table-row:hover {
   background: #f9fafb;
+}
+.class-delete-btn {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+}
+.class-delete-btn:hover {
+  background: #fee2e2;
 }
 .classes-table-row > span {
   font-weight: 400;
