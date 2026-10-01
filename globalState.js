@@ -13,6 +13,8 @@ const initialState = {
   classes: [],
   studentsRequests: [],
   bills: [],
+  drivers: [],
+  lines: [],
   loading: true,
   error: null,
 };
@@ -31,6 +33,7 @@ const reducer = (state, action) => {
 export const GlobalStateProvider = ({ children }) => {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [schoolId, setSchoolId] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const id = localStorage.getItem("adminSchoolID");
@@ -55,7 +58,9 @@ export const GlobalStateProvider = ({ children }) => {
           employeesSnap,
           classesSnap,
           studentsRequestsSnap,
-          billsSnap
+          billsSnap,
+          driversSnap,
+          linesSnap
         ] = await Promise.all([
           makeQuery("students", "school_id"),
           makeQuery("teachers", "school_id"),
@@ -63,6 +68,8 @@ export const GlobalStateProvider = ({ children }) => {
           makeQuery("classes", "schoolId"),
           makeQuery("students_requests", "school_id"),
           makeQuery("student_bills", "school_id"),
+          makeQuery("drivers", "school_id"),
+          makeQuery("lines", "school_id"),
         ]);
 
         dispatch({
@@ -74,6 +81,8 @@ export const GlobalStateProvider = ({ children }) => {
             classes: classesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
             studentsRequests: studentsRequestsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
             bills: billsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
+            drivers: driversSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
+            lines: linesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
           },
         });
 
@@ -83,10 +92,12 @@ export const GlobalStateProvider = ({ children }) => {
     };
 
     fetchData();
-  }, [schoolId]);
+  }, [schoolId, refreshKey]);
+
+  const refresh = () => setRefreshKey((k) => k + 1);
 
   return (
-    <GlobalStateContext.Provider value={state}>
+    <GlobalStateContext.Provider value={{ ...state, refresh }}>
       {children}
     </GlobalStateContext.Provider>
   );

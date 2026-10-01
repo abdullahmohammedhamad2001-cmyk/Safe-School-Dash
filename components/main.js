@@ -26,9 +26,12 @@ const GOLD_LIGHT = "#d4af37";
 const Globe = () => {
   const canvasRef = useRef(null);
   const [logo, setLogo] = useState("");
+  const [schoolName, setSchoolName] = useState("");
   useEffect(() => {
     const stored = localStorage.getItem("schoolLogo");
     if (stored && stored !== "undefined" && stored !== "null") setLogo(stored);
+    const name = localStorage.getItem("adminSchoolName");
+    if (name && name !== "undefined" && name !== "null") setSchoolName(name);
   }, []);
   useEffect(() => {
     let phi = 0;
@@ -54,15 +57,18 @@ const Globe = () => {
     return () => globe.destroy();
   }, []);
   return (
-    <div className="globe-canvas-wrap">
-      <canvas ref={canvasRef} className="globe-canvas" width={320} height={320} />
-      {logo ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={logo} alt="شعار المدرسة" className="globe-logo" onError={() => setLogo("")} />
-      ) : (
-        <span className="globe-letter">S</span>
-      )}
-    </div>
+    <>
+      {schoolName && <h2 className="school-name-title">{schoolName}</h2>}
+      <div className="globe-canvas-wrap">
+        <canvas ref={canvasRef} className="globe-canvas" width={320} height={320} />
+        {logo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logo} alt="شعار المدرسة" className="globe-logo" onError={() => setLogo("")} />
+        ) : (
+          <span className="globe-letter">S</span>
+        )}
+      </div>
+    </>
   );
 };
 

@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import ClipLoader from "react-spinners/ClipLoader";
 import {MdDashboard,MdPeople,MdSchool} from "react-icons/md";
 import { PiBagSimpleFill } from "react-icons/pi";
-import { FaBook } from "react-icons/fa";
-import { MdCreateNewFolder } from "react-icons/md";
+import { FaBook, FaCar } from "react-icons/fa";
+import { MdCreateNewFolder, MdDirectionsBus, MdAssessment } from "react-icons/md";
 import { BsFillCreditCardFill } from "react-icons/bs";
 import { IoDocumentText } from "react-icons/io5";
 import './style.css';
@@ -19,9 +19,12 @@ import Students from "../components/students";
 import Teachers from "../components/teachers";
 import Employees from "../components/employees";
 import Classes from "../components/classes";
+import Lines from "../components/lines";
+import Drivers from "../components/drivers";
 import StudentsRequests from "../components/studentsRequests";
 import Bills from "../components/bills";
 import BillingTemplate from "../components/BillingTemplate";
+import TransportReport from "../components/transportReport";
 
 const Dashboard = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -56,9 +59,12 @@ const Dashboard = () => {
     { label: "المدرسين", icon: MdPeople},
     { label: "الموضفين", icon: PiBagSimpleFill},
     { label: "الصفوف", icon: FaBook},
+    { label: "الخطوط", icon: MdDirectionsBus },
+    { label: "السواق", icon: FaCar },
     { label: "طلبات التسجيل", icon: MdCreateNewFolder },
     { label: "الحسابات", icon: BsFillCreditCardFill},
     { label: "الفاتورة السنوية", icon: IoDocumentText },
+    { label: "تقرير النقل", icon: MdAssessment },
   ];
 
   const renderContent = () => {
@@ -73,12 +79,18 @@ const Dashboard = () => {
         return <Employees/>;
       case "الصفوف":
         return <Classes/>;
+      case "الخطوط":
+        return <Lines/>;
+      case "السواق":
+        return <Drivers/>;
       case "طلبات التسجيل":
         return <StudentsRequests/>;
       case "الحسابات":
         return <Bills/>;
       case "الفاتورة السنوية":
         return <BillingTemplate/>
+      case "تقرير النقل":
+        return <TransportReport/>;
       default:
         return <Main />;
     }

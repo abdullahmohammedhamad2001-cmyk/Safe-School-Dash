@@ -292,8 +292,19 @@
 .globe-wrapper {
   flex-shrink: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 14px;
+  max-width: 280px;
+}
+.school-name-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--school-gold-dark);
 }
 .globe-canvas {
   width: 220px !important;
@@ -1962,4 +1973,581 @@
 .per-installment {
   color: #059669;
   font-size: 13px;
+}
+
+/* Drivers & Lines */
+.back-btn {
+  display: inline-flex;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+.delete-btn {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.delete-btn:hover {
+  opacity: 0.9;
+}
+.delete-btn.small {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.drivers-table,
+.lines-table {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.drivers-table-header,
+.drivers-table-row {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1fr;
+  padding: 12px;
+  direction: rtl;
+  align-items: center;
+}
+.drivers-table-header,
+.lines-table-header {
+  background: #f3f4f6;
+}
+.drivers-table-row,
+.lines-table-row {
+  border-top: 1px solid #e5e7eb;
+  cursor: pointer;
+}
+.drivers-table-row:hover,
+.lines-table-row:hover {
+  background: #f9fafb;
+}
+.drivers-table-header > span,
+.drivers-table-row > span,
+.lines-table-header > span,
+.lines-table-row > span {
+  font-weight: 400;
+  font-size: 14px;
+  text-align: center;
+}
+.lines-table-header,
+.lines-table-row {
+  display: grid;
+  grid-template-columns: 1fr 3fr 2fr 1fr 1.3fr;
+  padding: 12px;
+  direction: rtl;
+  align-items: center;
+}
+.lines-summary {
+  display: flex;
+  gap: 10px;
+  direction: rtl;
+  margin: 14px 0;
+  flex-wrap: wrap;
+}
+.lines-summary > span {
+  background: var(--school-gold-soft);
+  border: 1px solid var(--school-gold-border);
+  color: var(--school-gold-dark);
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-size: 13px;
+}
+.line-number-cell {
+  font-weight: bold;
+  color: var(--school-gold-dark);
+}
+.line-destination-cell strong {
+  display: block;
+  font-size: 13px;
+}
+.line-destination-cell small {
+  display: block;
+  font-size: 11px;
+  color: #6b7280;
+}
+.driver-avatar-placeholder {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--school-gold-soft);
+  color: var(--school-gold-dark);
+  border: 1px solid var(--school-gold-border);
+  font-weight: bold;
+  flex-shrink: 0;
+}
+.driver-avatar-placeholder.small {
+  width: 32px;
+  height: 32px;
+  font-size: 13px;
+}
+.driver-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.driver-chip img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--school-gold-border);
+  flex-shrink: 0;
+}
+.driver-chip-text strong {
+  display: block;
+  font-size: 13px;
+  color: #111827;
+}
+.driver-chip-text small {
+  display: block;
+  font-size: 11px;
+  color: #6b7280;
+}
+.no-driver-text {
+  font-size: 13px;
+  color: #9ca3af;
+}
+.assigned-badge {
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--school-gold-dark);
+  background: var(--school-gold-soft);
+  border-radius: 20px;
+  padding: 4px 10px;
+}
+.pending-badge {
+  font-size: 12px;
+  font-weight: bold;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 20px;
+  padding: 4px 10px;
+}
+.modal-hint {
+  font-size: 12px;
+  color: #6b7280;
+  direction: rtl;
+  margin: 0;
+}
+.driver-credentials {
+  text-align: center;
+  direction: ltr;
+}
+.driver-credentials p {
+  margin: 6px 0;
+  font-size: 15px;
+}
+.driver-image-input {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+.driver-image-input > input {
+  border: none;
+}
+.driver-image-input > p {
+  font-size: 12px;
+  margin: 0;
+}
+
+/* Driver & line details */
+.driver-details-container,
+.line-details-container {
+  padding: 20px;
+  position: relative;
+}
+.driver-card {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 25px;
+}
+.driver-card-top {
+  display: flex;
+  flex-direction: row-reverse;
+  gap: 20px;
+  align-items: center;
+}
+.driver-image {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #f3f4f6;
+}
+.driver-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.driver-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+}
+.driver-info h2,
+.driver-info p {
+  margin: 0px;
+  text-align: center;
+}
+.driver-info h2 {
+  font-weight: bold;
+  font-size: 22px;
+}
+.driver-meta {
+  display: flex;
+  flex-direction: row-reverse;
+  gap: 15px;
+  font-size: 14px;
+  color: #6b7280;
+}
+.driver-section {
+  margin-bottom: 30px;
+}
+.driver-section h3 {
+  margin-bottom: 10px;
+  text-align: right;
+}
+.car-image-box {
+  height: 300px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.car-image-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.placeholder {
+  width: 100%;
+  height: 100%;
+  background: #f3f4f6;
+}
+.lines-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.line-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.line-header {
+  background: #f9fafb;
+  padding: 10px;
+}
+.line-table {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.line-table-header,
+.line-table-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 10px;
+  direction: rtl;
+}
+.line-table-header {
+  background: #f3f4f6;
+}
+.line-table-row {
+  border-top: 1px solid #eee;
+}
+.line-table-row:hover {
+  background: #f9fafb;
+}
+.line-details-student-list-item {
+  grid-template-columns: 2fr 2fr 1.5fr 1fr;
+}
+.line-details-student-list-item > span {
+  text-align: center;
+  font-size: 14px;
+}
+.line-details-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.line-details-card h2,
+.line-details-card p {
+  margin: 0px;
+  text-align: center;
+}
+.line-details-card h2 {
+  font-weight: bold;
+  font-size: 22px;
+}
+.line-details-card p {
+  color: gray;
+}
+.line-section {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.driver-box {
+  position: relative;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+}
+.driver-remove-btn {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+}
+.driver-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  direction: rtl;
+}
+.driver-info-grid span {
+  display: block;
+  font-size: 12px;
+  color: #6b7280;
+}
+.driver-info-grid strong {
+  font-size: 14px;
+}
+.empty-with-action {
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  align-items: center;
+}
+.drivers-list {
+  max-height: 250px;
+  overflow-y: auto;
+  margin-top: 10px;
+}
+.driver-item {
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: space-around;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+.driver-item:hover {
+  background: #f9fafb;
+}
+.driver-item.active {
+  border-color: var(--school-gold-border);
+  background: var(--school-gold-soft);
+}
+.disabled-item {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Transport report */
+.report-controls-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+  direction: rtl;
+  margin-bottom: 20px;
+}
+.report-controls-box .input-group {
+  min-width: 200px;
+}
+.report-controls-box .input-group select,
+.report-controls-box .input-group input {
+  padding: 9px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  direction: rtl;
+}
+.report-actions {
+  display: flex;
+  gap: 10px;
+}
+.report-actions .create-submit {
+  min-width: 100px;
+  padding: 10px 18px;
+}
+.transport-report {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 794px;
+  margin: 0 auto;
+  padding: 24px;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  direction: rtl;
+  color: #000;
+}
+.transport-report * {
+  color: #000;
+}
+.report-header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 2px solid #000;
+  padding-bottom: 14px;
+  margin-bottom: 18px;
+}
+.report-logo-frame {
+  width: 96px;
+  height: 96px;
+  flex-shrink: 0;
+  border: 2px solid #000;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #fff;
+  box-sizing: border-box;
+}
+.report-logo-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.report-logo-frame.contain img {
+  object-fit: contain;
+  padding: 10px;
+  box-sizing: border-box;
+}
+.report-title-box {
+  flex: 1;
+  text-align: center;
+}
+.report-title-box h1 {
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 700;
+}
+.report-title-box h2 {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 700;
+}
+.report-title-box p {
+  margin: 0;
+  font-size: 12px;
+}
+.report-info-table,
+.report-students-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.report-info-table th,
+.report-info-table td,
+.report-students-table th,
+.report-students-table td {
+  border: 1px solid #000;
+  padding: 7px 8px;
+  text-align: center;
+  vertical-align: middle;
+}
+.report-info-table th,
+.report-students-table th {
+  background: #f3f4f6;
+  font-weight: 700;
+}
+.report-info-table th {
+  width: 15%;
+}
+.report-info-table td {
+  width: 35%;
+}
+.report-year {
+  margin: 18px 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: right;
+}
+.report-day {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: right;
+}
+.report-attendance-summary {
+  margin-bottom: 16px;
+}
+.report-attendance-summary th {
+  width: 30%;
+}
+.report-attendance-summary td {
+  width: 70%;
+}
+.report-students-table {
+  table-layout: fixed;
+}
+.report-students-table th,
+.report-students-table td {
+  font-size: 10.5px;
+  padding: 5px 3px;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+.report-students-table td.report-absent {
+  font-weight: 700;
+  text-decoration: underline;
+}
+.report-students-table tr {
+  page-break-inside: avoid;
+}
+.report-students-table thead {
+  display: table-header-group;
+}
+.report-total {
+  margin: 10px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+  .sidebar,
+  .report-controls {
+    display: none !important;
+  }
+  .main-content {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .transport-report {
+    max-width: none;
+    border: none;
+    padding: 0;
+  }
 }
