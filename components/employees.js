@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import {collection,addDoc,setDoc,doc,Timestamp,getDoc} from "firebase/firestore";
-import { DB } from "../firebaseConfig";
+import { rpc, adminAccounts } from "../supabaseClient";
 import { useGlobalState } from "../globalState";
 import { useRouter } from "next/navigation";
 import ClipLoader from "react-spinners/ClipLoader";
@@ -19,7 +18,8 @@ const EMPLOYEE_JOB_PRIORITY = {
 };
 
 const Employees = () => {
-  const { employees, loading } = useGlobalState();
+  const { employees, loading, refresh } = useGlobalState();
+  const [credentials, setCredentials] = useState(null);
 
   const router = useRouter();
 
@@ -91,7 +91,7 @@ const Employees = () => {
     return null;
   };
 
-  //Create new employee doc
+  //Create new employee account
   const handleCreateEmployee = async () => {
     try {
       setLoadingCreate(true);
@@ -108,67 +108,34 @@ const Employees = () => {
         return;
       }
 
-      //Prevent duplicate
-      const existingSnap = await getDoc(
-        doc(DB, "schoolAdmins", employeePhoneNumber.trim())
-      );
-
-      if (existingSnap.exists()) {
-        alert("رقم الهاتف مستخدم بالفعل");
-        return;
-      }
-
-      // 🔹 Get school data
       const schoolId = localStorage.getItem("adminSchoolID");
-      const schoolName = localStorage.getItem("adminSchoolName");
-      const logo = localStorage.getItem("schoolLogo");
 
-      if (!schoolId || !schoolName) {
+      if (!schoolId || schoolId === "ALL") {
         alert("لم يتم العثور على بيانات المدرسة");
         return;
       }
 
-      // 🔥 Generate password
-      const tempPassword = Math.random().toString(36).slice(-8);
-
-      // 🔥 Create employee doc
-      const employeeRef = await addDoc(collection(DB, "employees"), {
+      // The login account and employee record are created server-side; the password is shown once
+      const result = await adminAccounts({
+        action: "create_employee",
+        schoolId,
         name: employeeName.trim(),
-        phone_number: employeePhoneNumber.trim(),
+        phone: employeePhoneNumber.trim(),
         job_title: employeeJobTitle,
-        school_id: schoolId,
-        country: country,
-        is_active: true,
-        account_deleted: false,
-        created_at: Timestamp.now(),
-        username: employeePhoneNumber.trim(),
-        password: tempPassword,
       });
 
-      const employeeId = employeeRef.id;
-
-      // 🔥 Create login account
-      await setDoc(doc(DB, "schoolAdmins", employeePhoneNumber.trim()), {
-        username: employeePhoneNumber.trim(),
-        password: tempPassword,
-        role: "admin",
-        job_title: employeeJobTitle,
-        name: employeeName.trim(),
-        school: schoolName,
-        school_id: schoolId,
-        school_logo: logo,
-        admin_id: employeeId,
-        country: country,
-        account_banned: false,
-      });
-
-      alert("تم إنشاء الموظف بنجاح");
+      await refresh();
 
       closeCreateModal();
+      setCredentials({ username: result.username, password: result.password });
 
     } catch (e) {
       console.error(e);
-      alert("حدث خطأ أثناء إنشاء الموظف");
+      alert(
+        e.message === "phone_in_use" || e.message === "login_in_use"
+          ? "رقم الهاتف مستخدم بالفعل"
+          : "حدث خطأ أثناء إنشاء الموظف"
+      );
     } finally {
       setLoadingCreate(false);
     }
@@ -181,34 +148,22 @@ const Employees = () => {
         alert("يرجى اختيار الموظف");
         return;
       }
-  
-      setLoadingRestoreEmployee(true);
-  
-      const employeeRef = doc(DB, "employees", selectedRestoreEmployee.id);
-      const schoolAdminRef = doc(DB, "schoolAdmins", selectedRestoreEmployee.username);
-  
-      await runTransaction(DB, async (transaction) => {
-  
-        // ✅ Restore employee
-        transaction.update(employeeRef, {
-          account_deleted: false,
-          is_active: true,
-          deleted_at: null,
-        });
-  
-        // ✅ Unban login
-        transaction.update(schoolAdminRef, {
-          account_banned: false,
-          banned_at: null,
-        });
 
+      setLoadingRestoreEmployee(true);
+
+      await rpc("set_staff_deleted", {
+        p_kind: "employee",
+        p_id: selectedRestoreEmployee.id,
+        p_deleted: false,
       });
-  
+
+      await refresh();
+
       alert("تم استرجاع حساب الموظف بنجاح");
-  
+
       setSelectedRestoreEmployee(null);
       setOpenDeletedEmployeesModal(false);
-  
+
     } catch (e) {
       console.error(e);
       alert("فشل استرجاع الحساب");
@@ -219,6 +174,19 @@ const Employees = () => {
 
   return (
     <div className="students-container">
+      <Modal
+        title="بيانات دخول الموظف"
+        open={!!credentials}
+        onCancel={() => setCredentials(null)}
+        footer={null}
+        centered
+      >
+        <div style={{ textAlign: "center", direction: "ltr" }}>
+          <p>رقم الدخول: <strong>{credentials?.username}</strong></p>
+          <p>كلمة المرور: <strong>{credentials?.password}</strong></p>
+          <p style={{ color: "gray", fontSize: 13, direction: "rtl" }}>احفظ كلمة المرور الآن، لا يمكن عرضها مرة أخرى.</p>
+        </div>
+      </Modal>
       <div className="students-header">
         <h2>الموظفين</h2>
         <div style={{ display: "flex",flexDirection:'row-reverse', gap: 10 }}>

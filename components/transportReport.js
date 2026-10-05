@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import ClipLoader from "react-spinners/ClipLoader";
-import { DB } from "../firebaseConfig";
+import { supabase } from "../supabaseClient";
 import { useGlobalState } from "../globalState";
 import "../app/style.css";
 
@@ -104,11 +103,14 @@ const TransportReport = () => {
     if (!line?.driver_id || listedDriver) return;
 
     let cancelled = false;
-    getDoc(doc(DB, "drivers", line.driver_id))
-      .then((snap) => {
-        if (!cancelled && snap.exists()) setFetchedDriver({ id: snap.id, ...snap.data() });
-      })
-      .catch(console.error);
+    supabase
+      .from("drivers")
+      .select("*")
+      .eq("id", line.driver_id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled && data) setFetchedDriver(data);
+      });
 
     return () => {
       cancelled = true;
@@ -117,20 +119,31 @@ const TransportReport = () => {
 
   const driver = listedDriver || fetchedDriver;
 
-  // Trips are written by the driver app, one document per direction per day
+  // Trips are written by the driver app, one row per direction per day; student statuses live in trip_students
   useEffect(() => {
     setTrips([]);
     if (!line?.id) return;
 
     let cancelled = false;
     setLoadingTrips(true);
-    getDocs(query(collection(DB, "trips"), where("line_id", "==", line.id)))
-      .then((snap) => {
-        if (!cancelled) setTrips(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      })
-      .catch(console.error)
-      .finally(() => {
-        if (!cancelled) setLoadingTrips(false);
+    supabase
+      .from("trips")
+      .select("*, trip_students(student_id, status)")
+      .eq("line_id", line.id)
+      .then(({ data, error }) => {
+        if (error) console.error(error);
+        if (cancelled) return;
+
+        setTrips(
+          (data || []).map((t) => ({
+            ...t,
+            started_at: t.started_at ? new Date(t.started_at) : null,
+            students: Object.fromEntries(
+              (t.trip_students || []).map((r) => [r.student_id, r.status])
+            ),
+          }))
+        );
+        setLoadingTrips(false);
       });
 
     return () => {
@@ -143,11 +156,11 @@ const TransportReport = () => {
     const result = { to_school: null, to_home: null };
 
     trips.forEach((t) => {
-      if (!t.started_at?.toDate || !(t.direction in result)) return;
-      if (localDateKey(t.started_at.toDate()) !== tripDate) return;
+      if (!t.started_at || !(t.direction in result)) return;
+      if (localDateKey(t.started_at) !== tripDate) return;
 
       const current = result[t.direction];
-      if (!current || t.started_at.toMillis() > current.started_at.toMillis()) {
+      if (!current || t.started_at.getTime() > current.started_at.getTime()) {
         result[t.direction] = t;
       }
     });

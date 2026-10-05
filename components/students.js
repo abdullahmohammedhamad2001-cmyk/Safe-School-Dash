@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState, useMemo,useEffect } from "react";
-import {collection,getDocs,query,where,doc,runTransaction,serverTimestamp,Timestamp,arrayUnion} from "firebase/firestore";
-import { DB } from "../firebaseConfig";
+import { rpc, enrollErrorMessage } from "../supabaseClient";
 import { useGlobalState } from "../globalState";
 import { useRouter } from "next/navigation";
 import { sortClasses } from "../lib/sortClasses";
@@ -11,7 +10,7 @@ import { Modal } from "antd";
 import "../app/style.css";
 
 const Students = () => {
-  const { students, classes, loading } = useGlobalState();
+  const { students, classes, loading, refresh } = useGlobalState();
   const router = useRouter();
 
   const [nameFilter, setNameFilter] = useState("");
@@ -150,8 +149,6 @@ const Students = () => {
       }
 
       const schoolId = localStorage.getItem("adminSchoolID");
-      const schoolName = localStorage.getItem("adminSchoolName");
-      const logo = localStorage.getItem("schoolLogo");
       const country = localStorage.getItem("schoolCountry") || "iraq";
 
       const phoneError = validatePhoneNumber(studentPhoneNumber, country);
@@ -161,152 +158,25 @@ const Students = () => {
         return;
       }
 
-      if (!schoolId || !schoolName) {
+      if (!schoolId || schoolId === "ALL") {
         alert("لم يتم العثور على بيانات المدرسة");
         return;
       }
 
-      // 🔹 Get selected class
-      const selectedClass = classes.find(c => c.id === studentClassId);
-
-      // 🔹 Fetch billing template
-      const templatesSnap = await getDocs(
-        query(
-          collection(DB, "billing_templates"),
-          where("school_id", "==", schoolId),
-          where("academic_year", "==", academicYear)
-        )
-      );
-
-      if (templatesSnap.empty) {
-        alert(`لا يوجد قالب فواتير للسنة ${academicYear} \n يرجى إنشاء القالب أولاً`);
-        return;
-      }
-
-      const templateDoc = templatesSnap.docs[0];
-      const template = templateDoc.data();
-      const noBilling = template.is_empty || !template.installments?.length;
-
-      // 🔹 Fetch conversations BEFORE transaction
-      const conversationsSnap = await getDocs(
-        query(
-          collection(DB, "conversations"),
-          where("school_id", "==", schoolId),
-          where("class_id", "==", studentClassId),
-          where("scope", "==", "class_subject")
-        )
-      );
-
-      const conversationIds = conversationsSnap.docs.map(d => d.id);
-
-      // 🔥 TRANSACTION
-      await runTransaction(DB, async (transaction) => {
-        const schoolRef = doc(DB, "schools", schoolId);
-        const schoolSnap = await transaction.get(schoolRef);
-
-        if (!schoolSnap.exists()) {
-          throw new Error("SCHOOL_NOT_FOUND");
-        }
-
-        const schoolData = schoolSnap.data();
-
-        // 🔹 Convert birth date
-        const birthDate = Timestamp.fromDate(new Date(studentBirthDate));
-
-        const studentRef = doc(collection(DB, "students"));
-        const studentId = studentRef.id;
-
-        // ✅ Student document
-        transaction.set(studentRef, {
-          name: studentName.trim(),
-          parent_name: studentParentName.trim(),
-          phone_number: formatPhoneNumber(studentPhoneNumber,country),
-          sex: studentSex,
-          birth_date: birthDate,
-          destination: schoolName,
-          destination_location: {
-            latitude: Number(schoolData.location.latitude),
-            longitude: Number(schoolData.location.longitude),
-          },
-          school_id: schoolId,
-          school_logo: logo,
-          class_id: studentClassId,
-          class_name: selectedClass.name,
-          class_grade: selectedClass.grade,
-          billing_template_id: templateDoc.id,
-          home_location: null,
-          home_address: null,
-          linked_parent: null,
-          linked_at: null,
-          driver_id: null,
-          line_id: null,
-          account_deleted: false,
-          graduated:false,
-          country: country,
-          notification_token: null,
-          created_at: serverTimestamp(),
-        });
-
-        // 🔹 Academic year result
-        const recordRef = doc(collection(DB, "academic_records"));
-
-        transaction.set(recordRef, {
-          student_id: studentId,
-          school_id: schoolId,
-          academic_year: academicYear,
-          class_id: studentClassId,
-          class_name: selectedClass.name,
-          t1: null,
-          t2: null,
-          t3: null,
-          final_average: null,
-          result: null,
-          created_at: Timestamp.now(),
-        });
-
-        // 🔹 Billing logic
-        const gradeName = selectedClass.grade;
-        const gradeTotal = template.grade_amounts?.[gradeName];
-
-        if (!noBilling && !gradeTotal) {
-          throw new Error("GRADE_AMOUNT_NOT_FOUND");
-        }
-
-        const numberOfPayments = template.number_of_payments;
-        const totalAmount = Number(gradeTotal);
-        const baseAmount = Math.floor(totalAmount / numberOfPayments);
-        const remainder = totalAmount % numberOfPayments;
-
-        if (!noBilling) template.installments.forEach((inst, index) => {
-          const billRef = doc(collection(DB, "student_bills"));
-
-          const adjustedAmount = index === 0 ? baseAmount + remainder : baseAmount;
-
-          transaction.set(billRef, {
-            student_id: studentId,
-            school_id: schoolId,
-            academic_year: academicYear,
-            class_id: studentClassId,
-            grade_name: gradeName,
-            template_id: templateDoc.id,
-            installment_index: inst.index,
-            due_date: inst.due_date,
-            annual_total: totalAmount,
-            amount: adjustedAmount,
-            status: "unpaid",
-            paid_amount: 0,
-            paid_at: null,
-            created_at: Timestamp.now(),
-          });
-        });
-
-        // 🔹 Add to conversations
-        conversationIds.forEach((convId) => {
-          transaction.update(doc(DB, "conversations", convId), {
-            participant_ids: arrayUnion(studentId),
-          });
-        });
+      // Student, yearly record, bills and class chats are created in one database transaction
+      await rpc("create_student", {
+        p_school: schoolId,
+        p_name: studentName.trim(),
+        p_parent_name: studentParentName.trim(),
+        p_phone: formatPhoneNumber(studentPhoneNumber, country),
+        p_sex: studentSex,
+        p_birth: studentBirthDate,
+        p_class: studentClassId,
+        p_year: academicYear,
+        p_country: country,
       });
+
+      await refresh();
 
       alert("تم إنشاء الطالب والفواتير بنجاح");
 
@@ -314,7 +184,7 @@ const Students = () => {
 
     } catch (e) {
       console.error("Create student failed:", e);
-      alert("فشل إنشاء الطالب");
+      alert(enrollErrorMessage(e, academicYear) || "فشل إنشاء الطالب");
     } finally {
       setLoadingCreate(false);
     }
@@ -330,137 +200,13 @@ const Students = () => {
 
       setLoadingRestore(true);
 
-      const schoolId = localStorage.getItem("adminSchoolID");
-      const studentId = selectedRestoreStudent.id;
-
-      const selectedClass = classes.find(c => c.id === restoreClassId);
-
-      // 🔹 Fetch template for selected year
-      const templateSnap = await getDocs(
-        query(
-          collection(DB, "billing_templates"),
-          where("school_id", "==", schoolId),
-          where("academic_year", "==", restoreAcademicYear)
-        )
-      );
-
-      if (templateSnap.empty) {
-        alert("لا يوجد قالب فواتير لهذه السنة");
-        return;
-      }
-
-      const templateDoc = templateSnap.docs[0];
-      const template = templateDoc.data();
-      const noBilling = template.is_empty || !template.installments?.length;
-
-      // 🔹 Fetch existing bills
-      const billsSnap = await getDocs(
-        query(
-          collection(DB, "student_bills"),
-          where("student_id", "==", studentId),
-          where("academic_year", "==", restoreAcademicYear)
-        )
-      );
-
-      const hasBills = !billsSnap.empty;
-
-      // 🔹 Fetch academic record
-      const recordSnap = await getDocs(
-        query(
-          collection(DB, "academic_records"),
-          where("student_id", "==", studentId),
-          where("academic_year", "==", restoreAcademicYear)
-        )
-      );
-
-      const hasRecord = !recordSnap.empty;
-
-      // 🔹 Fetch conversations
-      const conversationsSnap = await getDocs(
-        query(
-          collection(DB, "conversations"),
-          where("school_id", "==", schoolId),
-          where("class_id", "==", restoreClassId),
-          where("scope", "==", "class_subject")
-        )
-      );
-
-      const conversationIds = conversationsSnap.docs.map(d => d.id);
-
-      // 🔥 TRANSACTION
-      await runTransaction(DB, async (transaction) => {
-        const studentRef = doc(DB, "students", studentId);
-
-        // ✅ Restore student
-        transaction.update(studentRef, {
-          account_deleted: false,
-          class_id: restoreClassId,
-          class_name: selectedClass.name,
-          class_grade: selectedClass.grade,
-        });
-
-        // 🔹 CREATE RECORD IF NOT EXIST
-        if (!hasRecord) {
-          const recordRef = doc(collection(DB, "academic_records"));
-
-          transaction.set(recordRef, {
-            student_id: studentId,
-            school_id: schoolId,
-            academic_year: restoreAcademicYear,
-            class_id: restoreClassId,
-            class_name: selectedClass.name,
-            t1: null,
-            t2: null,
-            t3: null,
-            final_average: null,
-            result: null,
-            created_at: Timestamp.now(),
-          });
-        }
-
-        // 🔹 CREATE BILLS IF NOT EXIST
-        if (!hasBills && !noBilling) {
-          const gradeName = selectedClass.grade;
-          const gradeTotal = template.grade_amounts?.[gradeName];
-
-          const numberOfPayments = template.number_of_payments;
-          const totalAmount = Number(gradeTotal);
-
-          const baseAmount = Math.floor(totalAmount / numberOfPayments);
-          const remainder = totalAmount % numberOfPayments;
-
-          template.installments.forEach((inst, index) => {
-            const billRef = doc(collection(DB, "student_bills"));
-
-            const adjustedAmount = index === 0 ? baseAmount + remainder : baseAmount;
-
-            transaction.set(billRef, {
-              student_id: studentId,
-              school_id: schoolId,
-              academic_year: restoreAcademicYear,
-              class_id: restoreClassId,
-              grade_name: gradeName,
-              template_id: templateDoc.id,
-              installment_index: inst.index,
-              due_date: inst.due_date,
-              annual_total: totalAmount,
-              amount: adjustedAmount,
-              status: "unpaid",
-              paid_amount: 0,
-              paid_at: null,
-              created_at: Timestamp.now(),
-            });
-          });
-        }
-
-        // 🔹 ADD TO CONVERSATIONS
-        conversationIds.forEach((convId) => {
-          transaction.update(doc(DB, "conversations", convId), {
-            participant_ids: arrayUnion(studentId),
-          });
-        });
-
+      await rpc("restore_student", {
+        p_student: selectedRestoreStudent.id,
+        p_class: restoreClassId,
+        p_year: restoreAcademicYear,
       });
+
+      await refresh();
 
       alert("تم استرجاع الطالب وتنظيم بياناته بنجاح");
 
@@ -470,7 +216,7 @@ const Students = () => {
 
     } catch (e) {
       console.error(e);
-      alert("فشل استرجاع الطالب");
+      alert(enrollErrorMessage(e, restoreAcademicYear) || "فشل استرجاع الطالب");
     } finally {
       setLoadingRestore(false);
     }

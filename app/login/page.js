@@ -2,8 +2,7 @@
 import React,{useState} from 'react'
 import '../style.css'
 import { useRouter } from 'next/navigation'
-import { collection,getDocs,query,where } from "firebase/firestore"
-import { DB } from '../../firebaseConfig'
+import { supabase, emailFor, loadSession, clearSessionCache } from '../../supabaseClient'
 import ClipLoader from "react-spinners/ClipLoader"
 import Image from 'next/image'
 import logo_image from '../../images/notification-icon.png'
@@ -18,52 +17,35 @@ const Login = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault()
+    setError('')
     setLoading(true)
 
     try {
-      // Query schoolAdmins first
-      const q1 = query(
-        collection(DB, "schoolAdmins"),
-        where("username", "==", username),
-        where("password", "==", password)
-      );
-      const snap1 = await getDocs(q1);
+      // School accounts first, then Safe Team accounts
+      let signIn = await supabase.auth.signInWithPassword({
+        email: emailFor('school_admin', username),
+        password,
+      })
 
-      if (!snap1.empty) {
-        const userData = snap1.docs[0].data()
-        localStorage.setItem('adminLoggedIn', true)
-        localStorage.setItem('adminDahboardName', userData?.name)
-        localStorage.setItem('adminSchoolID', userData?.school_id)
-        localStorage.setItem('adminSchoolName', userData?.school)
-        localStorage.setItem('schoolLogo', userData?.school_logo)
-        localStorage.setItem('schoolCountry', userData?.country)
-        localStorage.setItem('adminRole', userData?.role || 'admin')
-        setTimeout(() => { router.push("/"); }, 300);
-        return;
+      if (signIn.error) {
+        signIn = await supabase.auth.signInWithPassword({
+          email: emailFor('team', username),
+          password,
+        })
       }
 
-      // Fallback: check Safe Team admins
-      const q2 = query(
-        collection(DB, "admins"),
-        where("username", "==", username),
-        where("password", "==", password)
-      );
-      const snap2 = await getDocs(q2);
+      if (signIn.error) throw new Error('invalid')
 
-      if (!snap2.empty) {
-        const userData = snap2.docs[0].data()
-        localStorage.setItem('adminLoggedIn', true)
-        localStorage.setItem('adminDahboardName', userData?.dashboard_name)
-        localStorage.setItem('adminSchoolID', 'ALL')
-        localStorage.setItem('adminSchoolName', 'Safe Team')
-        localStorage.setItem('schoolLogo', '')
-        localStorage.setItem('schoolCountry', 'iraq')
-        localStorage.setItem('adminRole', 'safe_team')
-        setTimeout(() => { router.push("/"); }, 300);
-        return;
+      // Only school admins and Safe Team may use this dashboard (not teachers or drivers)
+      const session = await loadSession()
+
+      if (!session) {
+        await supabase.auth.signOut()
+        clearSessionCache()
+        throw new Error('invalid')
       }
 
-      setError('يرجى التثبت من المعلومات المدرجة')
+      router.push("/")
     } catch (err) {
       setError('يرجى التثبت من المعلومات المدرجة')
     } finally {

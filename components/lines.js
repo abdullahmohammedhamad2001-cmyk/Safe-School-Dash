@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { query, collection, orderBy, limit, getDocs, getDoc, doc, addDoc } from "firebase/firestore";
-import { DB } from "../firebaseConfig";
+import { rpc } from "../supabaseClient";
 import { useGlobalState } from "../globalState";
 import ClipLoader from "react-spinners/ClipLoader";
 import { useRouter } from "next/navigation";
@@ -58,18 +57,6 @@ const Lines = () => {
     setNewLineName("");
   };
 
-  // Line numbers are shared by every school, so the next one is read from all lines
-  const getNextLineNumber = async () => {
-    const snap = await getDocs(
-      query(collection(DB, "lines"), orderBy("line_number", "desc"), limit(1))
-    );
-
-    if (snap.empty) return "L001";
-
-    const last = parseInt(snap.docs[0].data().line_number.replace("L", ""));
-    return `L${String(last + 1).padStart(3, "0")}`;
-  };
-
   const handleCreateLine = async () => {
     const schoolId = localStorage.getItem("adminSchoolID");
 
@@ -81,30 +68,14 @@ const Lines = () => {
     try {
       setLoadingCreate(true);
 
-      const schoolSnap = await getDoc(doc(DB, "schools", schoolId));
-      if (!schoolSnap.exists()) {
-        alert("لم يتم العثور على بيانات المدرسة");
-        return;
-      }
-
-      const school = schoolSnap.data();
-      const lineNumber = await getNextLineNumber();
-
-      await addDoc(collection(DB, "lines"), {
-        line_number: lineNumber,
-        line_name: newLineName.trim() || `خط ${lines.length + 1}`,
-        destination: school.name,
-        destination_location: school.location || null,
-        school_id: schoolId,
-        driver_id: null,
-        driver_name: null,
-        car_type: null,
-        riders: [],
-        created_at: new Date(),
+      // Line numbers are shared by every school, so the database function picks the next one
+      await rpc("create_line", {
+        p_school: schoolId,
+        p_name: newLineName.trim() || `خط ${lines.length + 1}`,
       });
 
       closeCreateModal();
-      refresh();
+      await refresh();
     } catch (error) {
       console.error(error);
       alert("حدث خطأ أثناء إنشاء الخط");

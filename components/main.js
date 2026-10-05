@@ -16,6 +16,7 @@ import {
 } from "chart.js";
 import { Doughnut, Bar } from "react-chartjs-2";
 import createGlobe from "cobe";
+import { supabase, clearSessionCache } from "../supabaseClient";
 import '../app/style.css';
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
@@ -77,14 +78,12 @@ const Main = () => {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setLoggingOut(true);
-    setTimeout(() => {
-      localStorage.removeItem("adminLoggedIn");
-      localStorage.removeItem("adminDahboardName");
-      sessionStorage.clear();
-      router.push("/login");
-    }, 300);
+    await supabase.auth.signOut();
+    clearSessionCache();
+    sessionStorage.clear();
+    router.push("/login");
   };
 
   const activeStudents = students.filter(s => !s.account_deleted);

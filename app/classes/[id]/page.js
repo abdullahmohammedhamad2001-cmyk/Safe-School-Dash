@@ -3,8 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {useGlobalState} from '../../../globalState';
-import { collection,addDoc,getDocs,query,where,updateDoc,doc,arrayRemove,arrayUnion,Timestamp } from "firebase/firestore";
-import { DB } from "../../../firebaseConfig";
+import { supabase, rpc } from "../../../supabaseClient";
 import {sortClasses} from '../../../lib/sortClasses'
 import { Modal } from "antd";
 import ClipLoader from "react-spinners/ClipLoader";
@@ -20,11 +19,12 @@ const getTeacherName = (teachers, id) => {
 //Format time
 const formatTime = (timestamp) => {
     if (!timestamp) return "";
-    const date = timestamp.toDate();
+    const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
 
 const TimetableSection = ({ classData, teachers,students }) => {
+    const { refresh } = useGlobalState();
 
     const [openAddModal, setOpenAddModal] = useState(false);
     const [openEditModal, setOpenEditModal] = useState(false);
@@ -88,13 +88,11 @@ const TimetableSection = ({ classData, teachers,students }) => {
         setOpenAddModal(true);
     };
 
-    //Convert time to timestamp
+    //Convert a clock time to the ISO string stored in the timetable
     const toTimestamp = (timeStr) => {
         const [h, m] = timeStr.split(":");
 
-        return Timestamp.fromDate(
-            new Date(2000, 0, 1, Number(h), Number(m))
-        );
+        return new Date(2000, 0, 1, Number(h), Number(m)).toISOString();
     };
 
     //Check is subject exist
@@ -102,49 +100,6 @@ const TimetableSection = ({ classData, teachers,students }) => {
         return timetable.some(day =>
             day.sessions.some(s => s.subject === subject)
         );
-    };
-
-    //create new conversation for new session
-    const createClassSubjectConversationIfNeeded = async ({schoolId,classId,className,subject,teacherId,students}) => {
-        const existingSnap = await getDocs(
-            query(
-                collection(DB, "conversations"),
-                where("school_id", "==", schoolId),
-                where("class_id", "==", classId),
-                where("subject", "==", subject),
-                where("scope", "==", "class_subject"),
-                where("archived", "==", false)
-            )
-        );
-
-        if (!existingSnap.empty) return;
-
-        //Fetch students correctly
-        const studentsIds = students
-            .map((s) => s.id)
-            .filter(Boolean);
-
-        const participantIds = Array.from(
-            new Set([...studentsIds, teacherId])
-        );
-
-        const country = localStorage.getItem("schoolCountry") || "iraq";
-
-        await addDoc(collection(DB, "conversations"), {
-            type: "group",
-            scope: "class_subject",
-            school_id: schoolId,
-            class_id: classId,
-            class_name: className,
-            subject,
-            participant_ids: participantIds,
-            last_message: "تم بدء المحادثة",
-            last_message_at: Timestamp.now(),
-            last_message_sender_name: "المدرسة",
-            archived: false,
-            country,
-            created_at: Timestamp.now(),
-        });
     };
 
     //Save new session
@@ -192,40 +147,26 @@ const TimetableSection = ({ classData, teachers,students }) => {
 
             // sort by time
             updatedTimetable[dayIndex].sessions.sort(
-                (a, b) => a.start.toDate() - b.start.toDate()
+                (a, b) => new Date(a.start) - new Date(b.start)
             );
 
             //SAVE CLASS
-            await updateDoc(doc(DB, "classes", classData.id), {
-                timetable: updatedTimetable,
+            const { error } = await supabase
+                .from("classes")
+                .update({ timetable: updatedTimetable })
+                .eq("id", classData.id);
+
+            if (error) throw error;
+
+            // Links the teacher's subject to this class and opens the subject chat on its first session
+            await rpc("class_session_added", {
+                p_class: classData.id,
+                p_subject: newSession.subject,
+                p_teacher: newSession.teacher_id,
+                p_first_for_subject: !subjectExists,
             });
 
-            // 🔥 UPDATE TEACHER
-            const teacher = teachers.find(t => t.id === newSession.teacher_id);
-
-            if (teacher) {
-                const subjectKey = Object.keys(teacher.subjects || {}).find(
-                    k => teacher.subjects[k].name === newSession.subject
-                );
-
-                if (subjectKey) {   
-                    await updateDoc(doc(DB, "teachers", teacher.id), {
-                        [`subjects.${subjectKey}.class_ids`]: arrayUnion(classData.id),
-                    });
-                }
-            }
-
-            //CREATE CONVERSATION (if first time subject)
-            if (!subjectExists) {
-                await createClassSubjectConversationIfNeeded({
-                    schoolId: classData.schoolId,
-                    classId: classData.id,
-                    className: classData.name,
-                    subject: newSession.subject,
-                    teacherId: newSession.teacher_id,
-                    students,
-                });
-            }
+            await refresh();
 
             alert("تمت إضافة الحصة");
 
@@ -243,7 +184,7 @@ const TimetableSection = ({ classData, teachers,students }) => {
     const formatInputTime = (timestamp) => {
         if (!timestamp) return "";
 
-        const d = timestamp.toDate();
+        const d = new Date(timestamp);
         const h = d.getHours().toString().padStart(2, "0");
         const m = d.getMinutes().toString().padStart(2, "0");
 
@@ -283,12 +224,17 @@ const TimetableSection = ({ classData, teachers,students }) => {
 
             //ALWAYS SORT
             updatedTimetable[dayIndex].sessions.sort(
-                (a, b) => a.start.toDate() - b.start.toDate()
+                (a, b) => new Date(a.start) - new Date(b.start)
             );
 
-            await updateDoc(doc(DB, "classes", classData.id), {
-                timetable: updatedTimetable,
-            });
+            const { error } = await supabase
+                .from("classes")
+                .update({ timetable: updatedTimetable })
+                .eq("id", classData.id);
+
+            if (error) throw error;
+
+            await refresh();
 
             alert("تم التعديل بنجاح");
 
@@ -331,38 +277,12 @@ const TimetableSection = ({ classData, teachers,students }) => {
         return count;
     };
 
-    // Archive conversation
-    const archiveClassSubjectConversation = async ({ schoolId, classId, subject }) => {
-        const snap = await getDocs(
-            query(
-                collection(DB, "conversations"),
-                where("school_id", "==", schoolId),
-                where("class_id", "==", classId),
-                where("subject", "==", subject),
-                where("scope", "==", "class_subject"),
-                where("archived", "==", false)
-            )
-        );
-
-        if (snap.empty) return;
-
-        await Promise.all(
-            snap.docs.map(d =>
-                updateDoc(doc(DB, "conversations", d.id), {
-                    archived: true,
-                })
-            )
-        );
-    };
-
     //Delete session
     const handleDeleteSession = async (dayIndex, sessionIndex) => {
         try {
             if (!confirm("هل أنت متأكد من حذف الحصة؟")) return;
 
             setDeletingSession({ dayIndex, sessionIndex });
-
-            const schoolId = classData.schoolId;
 
             const sessionToDelete = classData.timetable[dayIndex].sessions[sessionIndex];
 
@@ -397,41 +317,23 @@ const TimetableSection = ({ classData, teachers,students }) => {
             }
 
             // SAVE CLASS
-            await updateDoc(doc(DB, "classes", classData.id), {
-                timetable: updatedTimetable,
+            const { error } = await supabase
+                .from("classes")
+                .update({ timetable: updatedTimetable })
+                .eq("id", classData.id);
+
+            if (error) throw error;
+
+            // Archive the subject chat after its last session and unlink the teacher after theirs
+            await rpc("class_session_removed", {
+                p_class: classData.id,
+                p_subject: subject,
+                p_teacher: teacherId,
+                p_last_for_subject: subjectCountBefore === 1,
+                p_last_for_teacher: teacherSubjectCountBefore === 1,
             });
 
-            // ARCHIVE CONVERSATION (last subject)
-            if (subjectCountBefore === 1) {
-                await archiveClassSubjectConversation({
-                    schoolId,
-                    classId: classData.id,
-                    subject,
-                });
-            }
-
-            // REMOVE CLASS FROM TEACHER (last session)
-            if (teacherSubjectCountBefore === 1) {
-                const teacherRef = doc(DB, "teachers", teacherId);
-                const teacherSnap = await getDocs(
-                    query(collection(DB, "teachers"), where("__name__", "==", teacherId))
-                );
-
-                if (!teacherSnap.empty) {
-                    const teacherData = teacherSnap.docs[0].data();
-                    const subjectsObj = teacherData.subjects || {};
-
-                    const subjectKey = Object.keys(subjectsObj).find(
-                        key => subjectsObj[key].name === subject
-                    );
-
-                    if (subjectKey) {
-                        await updateDoc(teacherRef, {
-                            [`subjects.${subjectKey}.class_ids`]: arrayRemove(classData.id),
-                        });
-                    }
-                }
-            }
+            await refresh();
 
             alert("تم حذف الحصة");
 
@@ -646,7 +548,7 @@ const TimetableSection = ({ classData, teachers,students }) => {
 
 const ClassDetails = () => {
     const { id } = useParams();
-    const { classes, students, teachers, loading } = useGlobalState();
+    const { classes, students, teachers, loading, refresh } = useGlobalState();
 
     const [openMoveModal, setOpenMoveModal] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState(null);
@@ -665,48 +567,6 @@ const ClassDetails = () => {
         return sortClasses(classes.filter(c => c.schoolId === currentClass.schoolId));
     }, [classes, currentClass]);
 
-    //Remove student from old class conversation
-    const removeStudentFromClassConversations = async (schoolId, classId, studentId) => {
-        const snap = await getDocs(
-            query(
-                collection(DB, "conversations"),
-                where("school_id", "==", schoolId),
-                where("class_id", "==", classId),
-                where("scope", "==", "class_subject"),
-                where("archived", "==", false)
-            )
-        );
-
-        await Promise.all(
-            snap.docs.map(d =>
-                updateDoc(doc(DB, "conversations", d.id), {
-                    participant_ids: arrayRemove(studentId),
-                })
-            )
-        );
-    };
-
-    //add student to new class conversation
-    const addStudentToClassConversations = async (schoolId, classId, studentId) => {
-        const snap = await getDocs(
-            query(
-                collection(DB, "conversations"),
-                where("school_id", "==", schoolId),
-                where("class_id", "==", classId),
-                where("scope", "==", "class_subject"),
-                where("archived", "==", false)
-            )
-        );
-
-        await Promise.all(
-            snap.docs.map(d =>
-                updateDoc(doc(DB, "conversations", d.id), {
-                    participant_ids: arrayUnion(studentId),
-                })
-            )
-        );
-    };
-
     //Handle move student
     const handleMoveStudent = async () => {
         try {
@@ -722,29 +582,13 @@ const ClassDetails = () => {
 
             setSwitchLoading(true);
 
-            const schoolId = currentClass.schoolId;
-            const studentId = selectedStudent.id;
-
-            //Remove from old class
-            await removeStudentFromClassConversations(
-                schoolId,
-                currentClass.id,
-                studentId
-            );
-
-            //Add to new class
-            await addStudentToClassConversations(
-                schoolId,
-                targetClassId,
-                studentId
-            );
-
-            //Update student document
-            await updateDoc(doc(DB, "students", studentId), {
-                class_id: targetClassId,
-                class_name: targetClassName,
-                class_grade:targetClassGrade
+            // Moves the student and swaps the class chats in one database transaction
+            await rpc("move_student_to_class", {
+                p_student: selectedStudent.id,
+                p_class: targetClassId,
             });
+
+            await refresh();
 
             alert("تم نقل الطالب بنجاح");
 

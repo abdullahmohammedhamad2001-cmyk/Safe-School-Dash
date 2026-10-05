@@ -3,8 +3,8 @@
 import React, { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useGlobalState } from "../../../globalState";
-import { doc, updateDoc, Timestamp, runTransaction } from "firebase/firestore";
-import { DB } from "../../../firebaseConfig";
+import { rpc, adminAccounts } from "../../../supabaseClient";
+import PhotoUpload from "../../../components/PhotoUpload";
 import ClipLoader from "react-spinners/ClipLoader";
 import { Modal } from "antd";
 import { FaUser } from "react-icons/fa";
@@ -14,7 +14,31 @@ const EmployeeDetails = () => {
     const { id } = useParams();
     const router = useRouter();
 
-    const { employees, loading } = useGlobalState();
+    const { employees, loading, refresh } = useGlobalState();
+
+    const [credentials, setCredentials] = useState(null);
+    const [resetting, setResetting] = useState(false);
+
+    // Passwords are not stored in readable form; this issues a new one
+    const handleResetPassword = async () => {
+        if (!employee.profile_id) {
+            alert("لا يوجد حساب دخول مرتبط بهذا الموظف");
+            return;
+        }
+
+        if (!confirm("هل تريد إنشاء كلمة مرور جديدة لهذا الموظف؟")) return;
+
+        try {
+            setResetting(true);
+            const result = await adminAccounts({ action: "reset_password", profileId: employee.profile_id });
+            setCredentials({ username: result.username, password: result.password });
+        } catch (e) {
+            console.error(e);
+            alert("حدث خطأ أثناء تغيير كلمة المرور");
+        } finally {
+            setResetting(false);
+        }
+    };
 
     const [openEditModal, setOpenEditModal] = useState(false);
     const [loadingEdit, setLoadingEdit] = useState(false);
@@ -33,7 +57,7 @@ const EmployeeDetails = () => {
     };
 
 
-    //Update employee data    
+    //Update employee data
     const handleUpdateEmployee = async () => {
         try {
             setLoadingEdit(true);
@@ -43,18 +67,10 @@ const EmployeeDetails = () => {
                 return;
             }
 
-            // 🔥 Update teacher
-            await updateDoc(doc(DB, "employees", employee.id), {
-                name: editName.trim(),
-            });
+            // Updates the employee record and the login profile name together
+            await rpc("update_employee_name", { p_employee: employee.id, p_name: editName.trim() });
 
-            // 🔥 Update schoolAdmins name (IMPORTANT)
-            await updateDoc(
-                doc(DB, "schoolAdmins", employee.username),
-                {
-                    name: editName.trim(),
-                }
-            );
+            await refresh();
 
             alert("تم تحديث بيانات الموظف");
 
@@ -68,7 +84,7 @@ const EmployeeDetails = () => {
         }
     };
 
-    //Delete employee doc
+    //Delete employee (locks the login account too)
     const handleDeleteEmployee = async (employee) => {
         if (deletingEmployee) return;
 
@@ -78,36 +94,9 @@ const EmployeeDetails = () => {
         try {
             setDeletingEmployee(true);
 
-            const employeeRef = doc(DB, "employees", employee.id);
-            const schoolAdminRef = doc(DB, "schoolAdmins", employee.username);
+            await rpc("set_staff_deleted", { p_kind: "employee", p_id: employee.id, p_deleted: true });
 
-            const result = await runTransaction(DB, async (transaction) => {
-                const employeeSnap = await transaction.get(employeeRef);
-
-                if (!employeeSnap.exists()) {
-                    return { error: "EMPLOYEE_NOT_FOUND" };
-                }
-
-                transaction.update(employeeRef, {
-                    account_deleted: true,
-                    is_active: false,
-                    deleted_at: Timestamp.now(),
-                });
-
-                transaction.update(schoolAdminRef, {
-                    account_banned: true,
-                    banned_at: Timestamp.now(),
-                });
-
-                return { success: true };
-            });
-
-            if (result?.error) {
-                 if (result.error === "EMPLOYEE_NOT_FOUND") {
-                    alert("حساب الموظف غير موجود");
-                }
-                return;
-            }
+            await refresh();
 
             alert("تم حذف حساب الموظف بنجاح");
 
@@ -131,12 +120,35 @@ const EmployeeDetails = () => {
 
     return (
         <div className="student-details-container">
+            <Modal
+                title="بيانات دخول الموظف"
+                open={!!credentials}
+                onCancel={() => setCredentials(null)}
+                footer={null}
+                centered
+            >
+                <div style={{ textAlign: "center", direction: "ltr" }}>
+                    <p>رقم الدخول: <strong>{credentials?.username}</strong></p>
+                    <p>كلمة المرور: <strong>{credentials?.password}</strong></p>
+                    <p style={{ color: "gray", fontSize: 13, direction: "rtl" }}>احفظ كلمة المرور الآن، لا يمكن عرضها مرة أخرى.</p>
+                </div>
+            </Modal>
 
             {/* HEADER */}
             <div className="card student-header">
-                <div className="student-avatar">
-                    <FaUser size={30} />
-                </div>
+                <PhotoUpload
+                    bucket="employee-photos"
+                    table="employees"
+                    schoolId={employee.school_id}
+                    recordId={employee.id}
+                    photoPath={employee.photo_path}
+                    photoUrl={employee.photo_url}
+                    fallback={
+                        <div className="student-avatar">
+                            <FaUser size={30} />
+                        </div>
+                    }
+                />
 
                 <div className="student-details-info">
                     <h3>{employee.name}</h3>
@@ -153,7 +165,7 @@ const EmployeeDetails = () => {
                 <div className="card-content details-grid">
                     <Detail label="الاسم" value={employee.name} />
                     <Detail label="رقم الهاتف" value={employee.username} />
-                    <Detail label="كلمة المرور" value={employee.password} />
+                    <Detail label="كلمة المرور" value={<button className="create-btn" style={{ height: 26, padding: "0 10px" }} disabled={resetting} onClick={handleResetPassword}>كلمة مرور جديدة</button>} />
                 </div>
             </div>
 

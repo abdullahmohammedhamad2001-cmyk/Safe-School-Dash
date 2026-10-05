@@ -3,8 +3,8 @@
 import React, { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useGlobalState } from "../../../globalState";
-import { doc, updateDoc, Timestamp, runTransaction } from "firebase/firestore";
-import { DB } from "../../../firebaseConfig";
+import { rpc, adminAccounts } from "../../../supabaseClient";
+import PhotoUpload from "../../../components/PhotoUpload";
 import ClipLoader from "react-spinners/ClipLoader";
 import { Modal } from "antd";
 import { FaUser } from "react-icons/fa";
@@ -14,7 +14,31 @@ const TeacherDetails = () => {
     const { id } = useParams();
     const router = useRouter();
 
-    const { teachers, classes, loading } = useGlobalState();
+    const { teachers, classes, loading, refresh } = useGlobalState();
+
+    const [credentials, setCredentials] = useState(null);
+    const [resetting, setResetting] = useState(false);
+
+    // Passwords are not stored in readable form; this issues a new one
+    const handleResetPassword = async () => {
+        if (!teacher.profile_id) {
+            alert("لا يوجد حساب دخول مرتبط بهذا المدرس");
+            return;
+        }
+
+        if (!confirm("هل تريد إنشاء كلمة مرور جديدة لهذا المدرس؟")) return;
+
+        try {
+            setResetting(true);
+            const result = await adminAccounts({ action: "reset_password", profileId: teacher.profile_id });
+            setCredentials({ username: result.username, password: result.password });
+        } catch (e) {
+            console.error(e);
+            alert("حدث خطأ أثناء تغيير كلمة المرور");
+        } finally {
+            setResetting(false);
+        }
+    };
 
     const [openEditModal, setOpenEditModal] = useState(false);
     const [loadingEdit, setLoadingEdit] = useState(false);
@@ -95,32 +119,14 @@ const TeacherDetails = () => {
                 return;
             }
 
-            const oldSubjects = teacherSubjectsMap;
-
-            const updatedSubjects = {};
-
-            editSubjects.forEach((subjectName) => {
-                const subjectId = subjectName.replace(/\s+/g, "_").toLowerCase();
-
-                updatedSubjects[subjectId] = {
-                    name: subjectName,
-                    class_ids: oldSubjects[subjectId]?.class_ids || [],
-                };
+            // Updates the teacher, the login profile name and the subject list together
+            await rpc("update_teacher", {
+                p_teacher: teacher.id,
+                p_name: editName.trim(),
+                p_subjects: editSubjects,
             });
 
-            // 🔥 Update teacher
-            await updateDoc(doc(DB, "teachers", teacher.id), {
-                name: editName.trim(),
-                subjects: updatedSubjects,
-            });
-
-            // 🔥 Update schoolAdmins name (IMPORTANT)
-            await updateDoc(
-                doc(DB, "schoolAdmins", teacher.username),
-                {
-                    name: editName.trim(),
-                }
-            );
+            await refresh();
 
             alert("تم تحديث بيانات المعلم");
 
@@ -128,13 +134,17 @@ const TeacherDetails = () => {
 
         } catch (e) {
             console.error(e);
-            alert("فشل التحديث");
+            alert(
+                e.message?.includes("SUBJECT_HAS_CLASSES")
+                    ? "لا يمكن حذف مادة مرتبطة بصفوف"
+                    : "فشل التحديث"
+            );
         } finally {
             setLoadingEdit(false);
         }
     };
 
-    //Delete Teacher doc
+    //Delete Teacher (locks the login account too)
     const handleDeleteTeacher = async (teacher) => {
         if (deletingTeacher) return;
 
@@ -144,49 +154,9 @@ const TeacherDetails = () => {
         try {
             setDeletingTeacher(true);
 
-            const teacherRef = doc(DB, "teachers", teacher.id);
-            const schoolAdminRef = doc(DB, "schoolAdmins", teacher.username);
+            await rpc("set_staff_deleted", { p_kind: "teacher", p_id: teacher.id, p_deleted: true });
 
-            const result = await runTransaction(DB, async (transaction) => {
-                const teacherSnap = await transaction.get(teacherRef);
-
-                if (!teacherSnap.exists()) {
-                    return { error: "TEACHER_NOT_FOUND" };
-                }
-
-                const teacherData = teacherSnap.data();
-                const subjects = teacherData.subjects || {};
-
-                const hasClasses = Object.values(subjects).some(
-                    (subj) => subj.class_ids && subj.class_ids.length > 0
-                );
-
-                if (hasClasses) {
-                    return { error: "TEACHER_HAS_CLASSES" };
-                }
-
-                transaction.update(teacherRef, {
-                    account_deleted: true,
-                    is_active: false,
-                    deleted_at: Timestamp.now(),
-                });
-
-                transaction.update(schoolAdminRef, {
-                    account_banned: true,
-                    banned_at: Timestamp.now(),
-                });
-
-                return { success: true };
-            });
-
-            if (result?.error) {
-                if (result.error === "TEACHER_HAS_CLASSES") {
-                    alert("لا يمكن حذف المعلم لأنه مرتبط بصفوف دراسية");
-                } else if (result.error === "TEACHER_NOT_FOUND") {
-                    alert("حساب المعلم غير موجود");
-                }
-                return;
-            }
+            await refresh();
 
             alert("تم حذف حساب المعلم بنجاح");
 
@@ -194,7 +164,14 @@ const TeacherDetails = () => {
 
         } catch (e) {
             console.error(e);
-            alert("فشل حذف الحساب");
+
+            if (e.message?.includes("TEACHER_HAS_CLASSES")) {
+                alert("لا يمكن حذف المعلم لأنه مرتبط بصفوف دراسية");
+            } else if (e.message?.includes("NOT_FOUND")) {
+                alert("حساب المعلم غير موجود");
+            } else {
+                alert("فشل حذف الحساب");
+            }
         } finally {
             setDeletingTeacher(false);
         }
@@ -212,12 +189,35 @@ const TeacherDetails = () => {
 
     return (
         <div className="student-details-container">
+            <Modal
+                title="بيانات دخول المدرس"
+                open={!!credentials}
+                onCancel={() => setCredentials(null)}
+                footer={null}
+                centered
+            >
+                <div style={{ textAlign: "center", direction: "ltr" }}>
+                    <p>رقم الدخول: <strong>{credentials?.username}</strong></p>
+                    <p>كلمة المرور: <strong>{credentials?.password}</strong></p>
+                    <p style={{ color: "gray", fontSize: 13, direction: "rtl" }}>احفظ كلمة المرور الآن، لا يمكن عرضها مرة أخرى.</p>
+                </div>
+            </Modal>
 
             {/* HEADER */}
             <div className="card student-header">
-                <div className="student-avatar">
-                    <FaUser size={30} />
-                </div>
+                <PhotoUpload
+                    bucket="teacher-photos"
+                    table="teachers"
+                    schoolId={teacher.school_id}
+                    recordId={teacher.id}
+                    photoPath={teacher.photo_path}
+                    photoUrl={teacher.photo_url}
+                    fallback={
+                        <div className="student-avatar">
+                            <FaUser size={30} />
+                        </div>
+                    }
+                />
 
                 <div className="student-details-info">
                     <h3>{teacher.name}</h3>
@@ -234,7 +234,7 @@ const TeacherDetails = () => {
                 <div className="card-content details-grid">
                     <Detail label="الاسم" value={teacher.name} />
                     <Detail label="رقم الهاتف" value={teacher.username} />
-                    <Detail label="كلمة المرور" value={teacher.password} />
+                    <Detail label="كلمة المرور" value={<button className="create-btn" style={{ height: 26, padding: "0 10px" }} disabled={resetting} onClick={handleResetPassword}>كلمة مرور جديدة</button>} />
                 </div>
             </div>
 

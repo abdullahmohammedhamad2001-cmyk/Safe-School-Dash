@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import {collection,addDoc,serverTimestamp,Timestamp} from "firebase/firestore";
-import { DB } from "../firebaseConfig";
+import { supabase } from "../supabaseClient";
 import { useGlobalState } from "../globalState";
 import { useRouter } from "next/navigation";
 import ClipLoader from "react-spinners/ClipLoader";
@@ -33,7 +32,7 @@ const GRADES_BY_LEVEL = {
 };
 
 const StudentsRequests = () => {
-  const { studentsRequests,loading } = useGlobalState();
+  const { studentsRequests, loading, refresh } = useGlobalState();
   const router = useRouter();
 
   const [nameFilter, setNameFilter] = useState("");
@@ -120,25 +119,26 @@ const StudentsRequests = () => {
         return;
       }
 
-      if (!schoolId) {
+      if (!schoolId || schoolId === "ALL") {
         alert("لم يتم العثور على بيانات المدرسة");
         return;
       }
 
-      const birthDate = Timestamp.fromDate(new Date(studentBirthDate));
-
-      await addDoc(collection(DB, "students_requests"), {
+      const { error } = await supabase.from("students_requests").insert({
         name: studentName.trim(),
         parent_name: studentParentName.trim(),
         phone_number: formatPhoneNumber(studentPhoneNumber,country),
         sex: studentSex,
-        birth_date: birthDate,
+        birth_date: studentBirthDate,
         school_id: schoolId,
         requested_level: selectedLevel,
         requested_grade: selectedGrade,
         status: "pending",
-        request_date: serverTimestamp(),
       });
+
+      if (error) throw error;
+
+      await refresh();
 
       alert("تم تسجيل الطلب");
       closeCreateModal();
@@ -341,7 +341,7 @@ const StudentsRequests = () => {
 
               <span>
                 {student.request_date
-                  ? new Date(student.request_date.seconds * 1000)
+                  ? new Date(student.request_date)
                     .toLocaleDateString("ar-EG")
                   : "-"
                 }

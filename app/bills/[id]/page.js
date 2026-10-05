@@ -2,8 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import {collection,getDocs,getDoc,query,where,doc,updateDoc,runTransaction,Timestamp} from "firebase/firestore";
-import { DB } from "../../../firebaseConfig";
+import { supabase, rpc } from "../../../supabaseClient";
 import html2pdf from "html2pdf.js";
 import { Modal } from "antd";
 import ClipLoader from "react-spinners/ClipLoader";
@@ -40,22 +39,23 @@ const BillingDetails = () => {
         try {
             setLoading(true);
 
-            const studentSnap = await getDoc(doc(DB, "students", id));
-            if (!studentSnap.exists()) return;
+            const { data: studentRow } = await supabase
+                .from("students")
+                .select("*")
+                .eq("id", id)
+                .maybeSingle();
 
-            setStudent({ id: studentSnap.id, ...studentSnap.data() });
+            if (!studentRow) return;
 
-            const billsSnap = await getDocs(
-                query(
-                    collection(DB, "student_bills"), 
-                    where("student_id", "==", id)
-                )
-            );
+            setStudent(studentRow);
 
-            const list = billsSnap.docs.map((d) => ({
-                id: d.id,
-                ...d.data(),
-            }));
+            const { data: list, error } = await supabase
+                .from("student_bills")
+                .select("*")
+                .eq("student_id", id)
+                .order("installment_index");
+
+            if (error) throw error;
 
             // 🔥 GROUP BY YEAR
             const grouped = {};
@@ -136,83 +136,8 @@ const BillingDetails = () => {
                 paymentValue = entered;
             }
 
-            // 🔹 ADMIN DATA (from localStorage)
-            const adminId = localStorage.getItem("adminSchoolID");
-            const adminName = localStorage.getItem("adminDahboardName");
-
-            if (!adminId) {
-                alert("لم يتم العثور على حساب المحاسب");
-                return;
-            }
-
-            await runTransaction(DB, async (transaction) => {
-                const billRef = doc(DB, "student_bills", bill.id);
-                const schoolRef = doc(DB, "schools", bill.school_id);
-
-                const billSnap = await transaction.get(billRef);
-
-                if (!billSnap.exists()) {
-                    throw new Error("BILL_NOT_FOUND");
-                }
-
-                const billData = billSnap.data();
-
-                //Already paid
-                if (billData.status === "paid") {
-                    throw new Error("BILL_ALREADY_PAID");
-                }
-
-                //Overpayment protection
-                if ((billData.paid_amount || 0) + paymentValue > billData.amount) {
-                    throw new Error("OVERPAYMENT");
-                }
-
-                const newPaidAmount = (billData.paid_amount || 0) + paymentValue;
-                const newRemaining = billData.amount - newPaidAmount;
-
-                let newStatus = "unpaid";
-                if (newRemaining <= 0) newStatus = "paid";
-                else if (newPaidAmount > 0) newStatus = "partial";
-
-                let receiptNumber = null;
-
-                // Generate receipt ONLY if fully paid
-                if (newStatus === "paid" && !billData.receipt_number) {
-
-                    const schoolSnap = await transaction.get(schoolRef);
-
-                    if (!schoolSnap.exists()) {
-                        throw new Error("SCHOOL_NOT_FOUND");
-                    }
-
-                    const schoolData = schoolSnap.data();
-                    const currentCounter = schoolData.receipt_counter || 0;
-
-                    const nextCounter = currentCounter + 1;
-
-                    receiptNumber = formatReceiptNumber(nextCounter);
-
-                    // update counter
-                    transaction.update(schoolRef, {
-                        receipt_counter: nextCounter
-                    });
-                }
-
-                const updateData = {
-                    paid_amount: newPaidAmount,
-                    status: newStatus,
-                    paid_at: Timestamp.now(),
-                    paid_by_name: adminName,
-                    paid_by_id: adminId,
-                    updated_at: Timestamp.now(),
-                };
-
-                if (receiptNumber) {
-                    updateData.receipt_number = receiptNumber;
-                }
-
-                transaction.update(billRef, updateData);
-            });
+            // Payment, receipt number and the school's receipt counter are updated in one database transaction
+            await rpc("pay_bill", { p_bill: bill.id, p_amount: paymentValue });
 
             // 🔥 REFRESH
             await fetchData();
@@ -228,9 +153,9 @@ const BillingDetails = () => {
         } catch (e) {
             console.error(e);
 
-            if (e.message === "BILL_ALREADY_PAID") {
+            if (e.message?.includes("BILL_ALREADY_PAID")) {
                 alert("تم دفع هذا القسط مسبقاً");
-            } else if (e.message === "OVERPAYMENT") {
+            } else if (e.message?.includes("OVERPAYMENT")) {
                 alert("لا يمكن دفع مبلغ أكبر من المتبقي");
             } else {
                 alert("فشل تسجيل الدفع");
@@ -353,57 +278,25 @@ const BillingDetails = () => {
                 0
             );
 
-            let newUnpaidTotal = 0;
-            let discountAmount = 0;
+            if (discountMode === "percentage" && val >= 100) {
+                alert("النسبة يجب أن تكون أقل من 100%");
+                return;
+            }
 
-            if (discountMode === "percentage") {
-                if (val >= 100) {
-                    alert("النسبة يجب أن تكون أقل من 100%");
-                    return;
-                }
-
-                newUnpaidTotal = Math.floor(unpaidTotal * (1 - val / 100));
-                discountAmount = val;
-            } else {
-                newUnpaidTotal = val;
-
-                if (newUnpaidTotal >= unpaidTotal) {
-                    alert("المبلغ يجب أن يكون أقل من غير المدفوع");
-                    return;
-                }
-
-                discountAmount = unpaidTotal - newUnpaidTotal;
+            if (discountMode !== "percentage" && val >= unpaidTotal) {
+                alert("المبلغ يجب أن يكون أقل من غير المدفوع");
+                return;
             }
 
             setApplyingDiscount(true);
 
-            const adminId = localStorage.getItem("adminSchoolID");
-            const adminName = localStorage.getItem("adminDahboardName");
-
-            const baseAmount = Math.floor(newUnpaidTotal / unpaidBills.length);
-            const remainder = newUnpaidTotal % unpaidBills.length;
-
-            await runTransaction(DB, async (transaction) => {
-                unpaidBills.forEach((bill, index) => {
-                    const billRef = doc(DB, "student_bills", bill.id);
-
-                    const adjustedAmount =
-                    index === unpaidBills.length - 1
-                        ? baseAmount + remainder
-                        : baseAmount;
-
-                    transaction.update(billRef, {
-                        amount: adjustedAmount,
-                        discounted: true,
-                        discounted_at: Timestamp.now(),
-                        discounted_by: adminName,
-                        discounted_by_id: adminId,
-                        discount_mode: discountMode,
-                        discount_value: discountAmount,
-                        discount_reason: discountReason || "",
-                    });
-                });
-
+            // The unpaid installments are re-priced together in one database transaction
+            await rpc("apply_discount", {
+                p_student: id,
+                p_year: selectedDiscountYear,
+                p_mode: discountMode === "percentage" ? "percentage" : "amount",
+                p_value: val,
+                p_reason: discountReason,
             });
 
             await fetchData();
@@ -426,7 +319,7 @@ const BillingDetails = () => {
     const formatDate = (timestamp) => {
         if (!timestamp) return "-";
 
-        const date = timestamp.toDate();
+        const date = new Date(timestamp);
 
         return date.toLocaleDateString("ar-EG", {
             year: "numeric",

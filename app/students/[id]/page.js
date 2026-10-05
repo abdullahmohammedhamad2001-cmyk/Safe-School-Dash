@@ -3,8 +3,8 @@
 import React, { useMemo,useState,useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {useGlobalState} from '../../../globalState';
-import { doc, updateDoc,setDoc,getDoc,getDocs,query,where,collection,Timestamp,runTransaction,arrayRemove,arrayUnion } from "firebase/firestore";
-import { DB } from "../../../firebaseConfig";
+import { supabase, rpc, enrollErrorMessage } from "../../../supabaseClient";
+import PhotoUpload from "../../../components/PhotoUpload";
 import ClipLoader from "react-spinners/ClipLoader";
 import { Modal } from "antd";
 import { FaFemale, FaMale } from "react-icons/fa";
@@ -16,7 +16,7 @@ const StudentDetails = () => {
     const { id } = useParams();
     const router = useRouter();
 
-    const { students, classes, loading } = useGlobalState();
+    const { students, classes, loading, refresh } = useGlobalState();
 
     const [deletingStudent, setDeletingStudent] = useState(false);
     const [openEditModal, setOpenEditModal] = useState(false);
@@ -63,17 +63,17 @@ const StudentDetails = () => {
         const fetchRecords = async () => {
             if (!student) return;
 
-            const snap = await getDocs(
-                query(
-                    collection(DB, "academic_records"),
-                    where("student_id", "==", student.id)
-                )
-            );
+            const { data, error } = await supabase
+                .from("academic_records")
+                .select("*")
+                .eq("student_id", student.id);
 
-            let records = snap.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
+            if (error) {
+                console.error(error);
+                return;
+            }
+
+            let records = [...data];
 
             //sort by academic year DESC
             records.sort((a, b) => {
@@ -143,17 +143,15 @@ const StudentDetails = () => {
                 return;
             }
 
-            const recordRef = record?.id
-                ? doc(DB, "academic_records", record.id)
-                : doc(collection(DB, "academic_records"));
-
             if (record?.id) {
-                await updateDoc(recordRef, {
-                    [field]: value,
-                    updated_at: Timestamp.now(),
-                });
+                const { error } = await supabase
+                    .from("academic_records")
+                    .update({ [field]: value, updated_at: new Date().toISOString() })
+                    .eq("id", record.id);
+
+                if (error) throw error;
             } else {
-                await setDoc(recordRef, {
+                const { error } = await supabase.from("academic_records").insert({
                     student_id: student.id,
                     school_id: student.school_id,
                     academic_year: record.academic_year,
@@ -161,15 +159,15 @@ const StudentDetails = () => {
                     class_name: student.class_name,
                     t1: field === "t1" ? value : null,
                     t2: field === "t2" ? value : null,
-                    t3: field === "t3" ? value : null,
-                    final_average: null,
-                    result: null,
-                    created_at: Timestamp.now(),
                 });
+
+                if (error) throw error;
             }
 
             setEditingField(null);
             setTempValue("");
+
+            await refresh();
 
         } catch (e) {
             console.error(e);
@@ -227,308 +225,76 @@ const StudentDetails = () => {
     };
 
     const handleConfirmPromotion = async () => {
+        let nextYear = "";
+
         try {
             setLoadingPromotion(true);
 
             const { record, t1, t2, t3, average, result } = promotionData;
 
-            const recordRef = record?.id
-                ? doc(DB, "academic_records", record.id)
-                : doc(collection(DB, "academic_records"));
+            nextYear = getNextAcademicYear(record.academic_year);
 
-            const studentRef = doc(DB, "students", student.id);
+            let action;
 
-            const nextYear = getNextAcademicYear(record.academic_year);
-
-            //CASE 3: FAIL → stay in same class
             if (result === "fail") {
-
+                // A failed student stays in the same class next year
                 if (isGraduated) {
                     alert("لا يمكن تخريج طالب راسب");
-                    setLoadingPromotion(false);
                     return;
                 }
 
-                const nextYear = getNextAcademicYear(record.academic_year);
+                action = "repeat";
+            } else if (isGraduated) {
+                action = "graduate";
+            } else {
+                const nextClasses = getNextClasses();
 
-                // 🔹 Billing template
-                const templatesSnap = await getDocs(
-                    query(
-                        collection(DB, "billing_templates"),
-                        where("school_id", "==", student.school_id),
-                        where("academic_year", "==", nextYear)
-                    )
-                );
-
-                if (templatesSnap.empty) {
-                    alert(`لا يوجد قالب فواتير للسنة ${nextYear}`);
-                    setLoadingPromotion(false);
+                if (!nextClasses.length) {
+                    alert("لا يوجد صف تالي، يمكن تخريج الطالب");
                     return;
                 }
 
-                const templateDoc = templatesSnap.docs[0];
-                const template = templateDoc.data();
-                const noBilling = template.is_empty || !template.installments?.length;
+                if (!selectedNextClass) {
+                    alert("يرجى اختيار الصف التالي");
+                    return;
+                }
 
-                await runTransaction(DB, async (transaction) => {
+                if (!nextClasses.some((c) => c.id === selectedNextClass)) {
+                    alert("الصف المختار غير صالح");
+                    return;
+                }
 
-                    // Save current year result
-                    transaction.set(recordRef, {
-                        student_id: student.id,
-                        school_id: student.school_id,
-                        academic_year: record.academic_year,
-                        class_id: student.class_id,
-                        class_name: student.class_name,
-                        t1,
-                        t2,
-                        t3,
-                        final_average: average,
-                        result,
-                        created_at: Timestamp.now(),
-                    }, { merge: true });
-
-                    // Create next academic record (same class)
-                    const newRecordRef = doc(collection(DB, "academic_records"));
-
-                    transaction.set(newRecordRef, {
-                        student_id: student.id,
-                        school_id: student.school_id,
-                        academic_year: nextYear,
-                        class_id: student.class_id,
-                        class_name: student.class_name,
-                        t1: null,
-                        t2: null,
-                        t3: null,
-                        final_average: null,
-                        result: null,
-                        created_at: Timestamp.now(),
-                    });
-
-                    //Create bills (same grade)
-                    const gradeName = student.class_grade;
-                    const gradeTotal = template.grade_amounts?.[gradeName];
-
-                    if (!noBilling && !gradeTotal) throw new Error("GRADE_AMOUNT_NOT_FOUND");
-
-                    const numberOfPayments = template.number_of_payments;
-                    const totalAmount = Number(gradeTotal);
-                    const baseAmount = Math.floor(totalAmount / numberOfPayments);
-                    const remainder = totalAmount % numberOfPayments;
-
-                    if (!noBilling) template.installments.forEach((inst, index) => {
-                        const billRef = doc(collection(DB, "student_bills"));
-
-                        const amount = index === 0 ? baseAmount + remainder : baseAmount;
-
-                        transaction.set(billRef, {
-                            student_id: student.id,
-                            school_id: student.school_id,
-                            academic_year: nextYear,
-                            class_id: student.class_id,
-                            grade_name: gradeName,
-                            template_id: templateDoc.id,
-                            installment_index: inst.index,
-                            due_date: inst.due_date,
-                            annual_total: totalAmount,
-                            amount,
-                            status: "unpaid",
-                            paid_amount: 0,
-                            paid_at: null,
-                            created_at: Timestamp.now(),
-                        });
-                    });
-
-                });
-
-                alert("تم حفظ النتيجة - الطالب راسب و تم تسجيله للسنة القادمة");
-
-                setOpenPromotionModal(false);
-                return;
+                action = "promote";
             }
 
-            // 🟢 CASE 2: PASS + GRADUATED
-            if (result === "pass" && isGraduated) {
-                await runTransaction(DB, async (transaction) => {
-                    transaction.set(recordRef, {
-                        student_id: student.id,
-                        school_id: student.school_id,
-                        academic_year: record.academic_year,
-                        class_id: student.class_id,
-                        class_name: student.class_name,
-                        t1,
-                        t2,
-                        t3,
-                        final_average: average,
-                        result,
-                        created_at: Timestamp.now(),
-                    }, { merge: true });
-
-                    transaction.update(studentRef, {
-                        graduated: true,
-                    });
-                });
-
-                alert("تم تخريج الطالب بنجاح");
-                setOpenPromotionModal(false);
-                return;
-            }
-
-            // 🟢 CASE 1: PASS → move to next class automatically
-            const nextClasses = getNextClasses();
-
-            if (!nextClasses.length) {
-                alert("لا يوجد صف تالي، يمكن تخريج الطالب");
-                setLoadingPromotion(false);
-                return;
-            }
-
-            // ❗ enforce selection
-            if (!selectedNextClass) {
-                alert("يرجى اختيار الصف التالي");
-                setLoadingPromotion(false);
-                return;
-            }
-
-            const nextClass = nextClasses.find(c => c.id === selectedNextClass);
-
-            if (!nextClass) {
-                alert("الصف المختار غير صالح");
-                setLoadingPromotion(false);
-                return;
-            }
-
-            // 🔹 Billing template
-            const templatesSnap = await getDocs(
-            query(
-                collection(DB, "billing_templates"),
-                where("school_id", "==", student.school_id),
-                where("academic_year", "==", nextYear)
-            )
-            );
-
-            if (templatesSnap.empty) {
-                alert(`لا يوجد قالب فواتير للسنة ${nextYear}`);
-                setLoadingPromotion(false);
-                return;
-            }
-
-            const templateDoc = templatesSnap.docs[0];
-            const template = templateDoc.data();
-            const noBilling = template.is_empty || !template.installments?.length;
-
-            // 🔹 Conversations
-            const oldConvSnap = await getDocs(
-                query(
-                    collection(DB, "conversations"),
-                    where("school_id", "==", student.school_id),
-                    where("class_id", "==", student.class_id),
-                    where("scope", "==", "class_subject")
-                )
-            );
-
-            const newConvSnap = await getDocs(
-                query(
-                    collection(DB, "conversations"),
-                    where("school_id", "==", student.school_id),
-                    where("class_id", "==", nextClass.id),
-                    where("scope", "==", "class_subject")
-                )
-            );
-
-            await runTransaction(DB, async (transaction) => {
-
-                // ✅ Save result
-                transaction.set(recordRef, {
-                    student_id: student.id,
-                    school_id: student.school_id,
-                    academic_year: record.academic_year,
-                    class_id: student.class_id,
-                    class_name: student.class_name,
-                    t1,
-                    t2,
-                    t3,
-                    final_average: average,
-                    result,
-                    created_at: Timestamp.now(),
-                }, { merge: true });
-
-                // ✅ Update student class
-                transaction.update(studentRef, {
-                    class_id: nextClass.id,
-                    class_name: nextClass.name,
-                    class_grade: nextClass.grade,
-                });
-
-                // ✅ Create next year record
-                const newRecordRef = doc(collection(DB, "academic_records"));
-
-                transaction.set(newRecordRef, {
-                    student_id: student.id,
-                    school_id: student.school_id,
-                    academic_year: nextYear,
-                    class_id: nextClass.id,
-                    class_name: nextClass.name,
-                    t1: null,
-                    t2: null,
-                    t3: null,
-                    final_average: null,
-                    result: null,
-                    created_at: Timestamp.now(),
-                });
-
-                // ✅ Bills
-                const gradeTotal = template.grade_amounts?.[nextClass.grade];
-                if (!noBilling && !gradeTotal) throw new Error("GRADE_AMOUNT_NOT_FOUND");
-
-                const numberOfPayments = template.number_of_payments;
-                const totalAmount = Number(gradeTotal);
-                const baseAmount = Math.floor(totalAmount / numberOfPayments);
-                const remainder = totalAmount % numberOfPayments;
-
-                if (!noBilling) template.installments.forEach((inst, index) => {
-                    const billRef = doc(collection(DB, "student_bills"));
-
-                    const amount = index === 0 ? baseAmount + remainder : baseAmount;
-
-                    transaction.set(billRef, {
-                        student_id: student.id,
-                        school_id: student.school_id,
-                        academic_year: nextYear,
-                        class_id: nextClass.id,
-                        grade_name: nextClass.grade,
-                        template_id: templateDoc.id,
-                        installment_index: inst.index,
-                        due_date: inst.due_date,
-                        annual_total: totalAmount,
-                        amount,
-                        status: "unpaid",
-                        paid_amount: 0,
-                        paid_at: null,
-                        created_at: Timestamp.now(),
-                    });
-                });
-
-                // ✅ Conversations
-                oldConvSnap.docs.forEach((docSnap) => {
-                    transaction.update(doc(DB, "conversations", docSnap.id), {
-                    participant_ids: arrayRemove(student.id),
-                    });
-                });
-
-                newConvSnap.docs.forEach((docSnap) => {
-                    transaction.update(doc(DB, "conversations", docSnap.id), {
-                    participant_ids: arrayUnion(student.id),
-                    });
-                });
-
+            // Result, next-year record, bills and class chats are saved in one database transaction
+            await rpc("promote_student", {
+                p_student: student.id,
+                p_year: record.academic_year,
+                p_t1: t1,
+                p_t2: t2,
+                p_t3: t3,
+                p_avg: average,
+                p_result: result,
+                p_action: action,
+                p_next_class: action === "promote" ? selectedNextClass : null,
             });
 
-            alert("تمت الترقية بنجاح");
+            await refresh();
+
+            alert(
+                action === "repeat"
+                    ? "تم حفظ النتيجة - الطالب راسب و تم تسجيله للسنة القادمة"
+                    : action === "graduate"
+                    ? "تم تخريج الطالب بنجاح"
+                    : "تمت الترقية بنجاح"
+            );
+
             setOpenPromotionModal(false);
 
         } catch (e) {
             console.error(e);
-            alert("فشل العملية");
+            alert(enrollErrorMessage(e, nextYear) || "فشل العملية");
         } finally {
             setLoadingPromotion(false);
         }
@@ -538,7 +304,7 @@ const StudentDetails = () => {
     const formatDate = (timestamp) => {
         if (!timestamp) return "-";
 
-        const date = timestamp.toDate();
+        const date = new Date(timestamp);
 
         return date.toLocaleDateString("ar-EG", {
             year: "numeric",
@@ -554,14 +320,8 @@ const StudentDetails = () => {
         setEditParentName(student.parent_name || "");
         setEditSex(student.sex || "male");
 
-        // Local date parts: toISOString() shifts the day back in UTC+ time zones
-        if (student.birth_date) {
-            const d = student.birth_date.toDate();
-            const pad = (n) => String(n).padStart(2, "0");
-            setEditBirthDate(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
-        } else {
-            setEditBirthDate("");
-        }
+        // birth_date is a plain YYYY-MM-DD date, which is what the date input expects
+        setEditBirthDate(student.birth_date || "");
 
         let rawPhone = student.phone_number || "";
 
@@ -602,77 +362,45 @@ const StudentDetails = () => {
                 return;
             }
 
-            const [y, m, d] = editBirthDate.split("-").map(Number);
-            const birthDate = Timestamp.fromDate(new Date(y, m - 1, d));
-
             const newClass = classes.find((c) => c.id === editClassId);
             const classChanged = !!newClass && newClass.id !== editingStudent.class_id;
 
-            const updates = {
-                name: editName.trim(),
-                parent_name: editParentName.trim(),
-                phone_number: `+964${editPhone}`,
-                sex: editSex,
-                birth_date: birthDate,
-                birth_date_estimated: false,
-                updated_at: Timestamp.now(),
-            };
-
-            if (!classChanged) {
-                await updateDoc(doc(DB, "students", editingStudent.id), updates);
-                alert("تم تحديث بيانات الطالب");
-                setOpenEditModal(false);
-                return;
-            }
-
             // Bills are priced per grade, so a student with bills cannot be moved silently
-            const billsSnap = await getDocs(
-                query(collection(DB, "student_bills"), where("student_id", "==", editingStudent.id))
-            );
-            if (!billsSnap.empty) {
-                alert("لا يمكن تغيير الصف لطالب لديه فواتير");
-                return;
+            if (classChanged) {
+                const { count } = await supabase
+                    .from("student_bills")
+                    .select("id", { count: "exact", head: true })
+                    .eq("student_id", editingStudent.id);
+
+                if (count > 0) {
+                    alert("لا يمكن تغيير الصف لطالب لديه فواتير");
+                    return;
+                }
             }
 
-            const convQuery = (classId) => getDocs(
-                query(
-                    collection(DB, "conversations"),
-                    where("school_id", "==", editingStudent.school_id),
-                    where("class_id", "==", classId),
-                    where("scope", "==", "class_subject")
-                )
-            );
-            const [oldConvSnap, newConvSnap] = await Promise.all([
-                convQuery(editingStudent.class_id),
-                convQuery(newClass.id),
-            ]);
+            const { error } = await supabase
+                .from("students")
+                .update({
+                    name: editName.trim(),
+                    parent_name: editParentName.trim(),
+                    phone_number: `+964${editPhone}`,
+                    sex: editSex,
+                    birth_date: editBirthDate,
+                    birth_date_estimated: false,
+                })
+                .eq("id", editingStudent.id);
 
-            const currentRecord = academicRecords.find(
-                (r) => r.id && r.academic_year === getAcademicYearAuto()
-            );
+            if (error) throw error;
 
-            await runTransaction(DB, async (transaction) => {
-                transaction.update(doc(DB, "students", editingStudent.id), {
-                    ...updates,
-                    class_id: newClass.id,
-                    class_name: newClass.name,
-                    class_grade: newClass.grade,
+            if (classChanged) {
+                await rpc("move_student_to_class", {
+                    p_student: editingStudent.id,
+                    p_class: newClass.id,
+                    p_year: getAcademicYearAuto(),
                 });
+            }
 
-                if (currentRecord) {
-                    transaction.update(doc(DB, "academic_records", currentRecord.id), {
-                        class_id: newClass.id,
-                        class_name: newClass.name,
-                    });
-                }
-
-                oldConvSnap.docs.forEach((c) => {
-                    transaction.update(c.ref, { participant_ids: arrayRemove(editingStudent.id) });
-                });
-                newConvSnap.docs.forEach((c) => {
-                    transaction.update(c.ref, { participant_ids: arrayUnion(editingStudent.id) });
-                });
-            });
+            await refresh();
 
             alert("تم تحديث بيانات الطالب");
             setOpenEditModal(false);
@@ -689,65 +417,13 @@ const StudentDetails = () => {
         const confirmDelete = confirm("هل أنت متأكد من حذف هذا الحساب؟");
         if (!confirmDelete) return;
 
-        const adminId = localStorage.getItem("adminSchoolID");
-
         try {
             setDeletingStudent(true);
 
-            const studentRef = doc(DB, "students", studentID);
+            // Soft delete, removal from the class chats and freeing the transport seat, in one transaction
+            await rpc("delete_student", { p_student: studentID });
 
-            // 🔹 Get student data FIRST
-            const studentSnap = await getDoc(studentRef);
-
-            if (!studentSnap.exists()) {
-                alert("الطالب غير موجود");
-                return;
-            }
-
-            const studentData = studentSnap.data();
-
-            const schoolId = studentData.school_id;
-            const classId = studentData.class_id;
-
-            // 🔹 Get ALL class conversations
-            const conversationsSnap = await getDocs(
-                query(
-                    collection(DB, "conversations"),
-                    where("school_id", "==", schoolId),
-                    where("class_id", "==", classId),
-                    where("scope", "==", "class_subject"),
-                )
-            );
-
-            const conversationIds = conversationsSnap.docs.map(d => d.id);
-
-            //TRANSACTION
-            await runTransaction(DB, async (transaction) => {
-
-                //Remove student from conversations
-                conversationIds.forEach((convId) => {
-                    transaction.update(doc(DB, "conversations", convId), {
-                        participant_ids: arrayRemove(studentID),
-                    });
-                });
-
-                //Soft delete student
-                transaction.update(studentRef, {
-                    account_deleted: true,
-                    deleted_at: Timestamp.now(),
-                    deleted_by: adminId,
-                    line_id: null,
-                    driver_id: null,
-                });
-
-                //Free the seat on the transport line
-                if (studentData.line_id) {
-                    transaction.update(doc(DB, "lines", studentData.line_id), {
-                        riders: arrayRemove(studentID),
-                    });
-                }
-
-            });
+            await refresh();
 
             alert("تم حذف الحساب بنجاح");
 
@@ -772,9 +448,19 @@ const StudentDetails = () => {
     return (
         <div className="student-details-container">
             <div className="card student-header">
-                <div className="student-avatar">
-                    {student.sex === "female" ? <FaFemale size={36}/> : <FaMale size={36} />}
-                </div>
+                <PhotoUpload
+                    bucket="student-photos"
+                    table="students"
+                    schoolId={student.school_id}
+                    recordId={student.id}
+                    photoPath={student.photo_path}
+                    photoUrl={student.photo_url}
+                    fallback={
+                        <div className="student-avatar">
+                            {student.sex === "female" ? <FaFemale size={36}/> : <FaMale size={36} />}
+                        </div>
+                    }
+                />
                 <div className="student-details-info">
                     <h3>{student.name} {student.parent_name}</h3>
                     <p className="sub-text">{className}</p>

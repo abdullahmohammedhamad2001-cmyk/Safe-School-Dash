@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { doc, getDoc } from "firebase/firestore";
-import { DB } from "../firebaseConfig";
+import { loadSession } from "../supabaseClient";
 import ClipLoader from "react-spinners/ClipLoader";
 import {MdDashboard,MdPeople,MdSchool} from "react-icons/md";
 import { PiBagSimpleFill } from "react-icons/pi";
@@ -36,24 +35,12 @@ const Dashboard = () => {
 
   useEffect(() => {
     const init = async () => {
-      if (!localStorage.getItem("adminLoggedIn")) {
+      // Rebuilds the cached school name/logo from the database on every visit
+      const session = await loadSession();
+
+      if (!session) {
         router.push("/login");
         return;
-      }
-
-      // Name and logo are cached at login, so pick up any change made since
-      const schoolId = localStorage.getItem("adminSchoolID");
-      if (schoolId && schoolId !== "ALL") {
-        try {
-          const snap = await getDoc(doc(DB, "schools", schoolId));
-          if (snap.exists()) {
-            const { name, logo_url } = snap.data();
-            if (name) localStorage.setItem("adminSchoolName", name);
-            if (logo_url) localStorage.setItem("schoolLogo", logo_url);
-          }
-        } catch (e) {
-          console.log(e);
-        }
       }
 
       const storedLogo = localStorage.getItem("schoolLogo");

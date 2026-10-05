@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState,useMemo } from "react";
-import {collection,addDoc,setDoc,doc,runTransaction,Timestamp,getDoc} from "firebase/firestore";
-import { DB } from "../firebaseConfig";
+import { rpc, adminAccounts } from "../supabaseClient";
 import { useGlobalState } from "../globalState";
 import { useRouter } from "next/navigation";
 import ClipLoader from "react-spinners/ClipLoader";
@@ -10,7 +9,8 @@ import { Modal } from "antd";
 import "../app/style.css";
 
 const Teachers = () => {
-  const { teachers, classes, loading } = useGlobalState();
+  const { teachers, classes, loading, refresh } = useGlobalState();
+  const [credentials, setCredentials] = useState(null);
   
   const country = localStorage.getItem("schoolCountry") || "iraq";
 
@@ -118,7 +118,7 @@ const Teachers = () => {
     return null;
   };
   
-  //Create new teacher doc
+  //Create new teacher account
   const handleCreateTeacher = async () => {
     try {
       setLoadingCreate(true);
@@ -135,77 +135,34 @@ const Teachers = () => {
         return;
       }
 
-      //Prevent duplicate
-      const existingSnap = await getDoc(
-        doc(DB, "schoolAdmins", teacherPhoneNumber.trim())
-      );
-      
-      if (existingSnap.exists()) {
-        alert("رقم الهاتف مستخدم بالفعل");
-        return;
-      }
-
       const schoolId = localStorage.getItem("adminSchoolID");
-      const schoolName = localStorage.getItem("adminSchoolName");
-      const logo = localStorage.getItem("schoolLogo");
 
-      if (!schoolId || !schoolName) {
+      if (!schoolId || schoolId === "ALL") {
         alert("لم يتم العثور على بيانات المدرسة");
         return;
       }
 
-      // 🔥 Generate password
-      const tempPassword = Math.random().toString(36).slice(-8);
-
-      // 🔥 Build subjects map
-      const subjectsMap = {};
-
-      teacherSubjects.forEach((subjectName) => {
-        const subjectId = subjectName.replace(/\s+/g, "_").toLowerCase();
-
-        subjectsMap[subjectId] = {
-          name: subjectName,
-          class_ids: [],
-        };
-      });
-
-      //Create teacher doc
-      const teacherRef = await addDoc(collection(DB, "teachers"), {
+      // The login account, teacher record and subjects are created server-side; the password is shown once
+      const result = await adminAccounts({
+        action: "create_teacher",
+        schoolId,
         name: teacherName.trim(),
-        phone_number: teacherPhoneNumber.trim(),
-        subjects: subjectsMap,
-        school_id: schoolId,
-        country: country,
-        is_active: true,
-        account_deleted: false,
-        created_at: Timestamp.now(),
-        username: teacherPhoneNumber.trim(),
-        password: tempPassword,
+        phone: teacherPhoneNumber.trim(),
+        subjects: teacherSubjects,
       });
 
-      const teacherId = teacherRef.id;
-
-      //Create school admin (teacher login)
-      await setDoc(doc(DB, "schoolAdmins", teacherPhoneNumber.trim()), {
-        username: teacherPhoneNumber.trim(),
-        password: tempPassword,
-        role: "teacher",
-        name: teacherName.trim(),
-        school: schoolName,
-        school_id: schoolId,
-        school_logo: logo,
-        teacher_id: teacherId,
-        country: country,
-        account_banned: false,
-      });
-
-      alert("تم إنشاء حساب المدرس بنجاح");
+      await refresh();
 
       closeCreateModal();
+      setCredentials({ username: result.username, password: result.password });
 
     } catch (e) {
       console.error(e);
-      alert("حدث خطأ أثناء إنشاء المدرس");
+      alert(
+        e.message === "phone_in_use" || e.message === "login_in_use"
+          ? "رقم الهاتف مستخدم بالفعل"
+          : "حدث خطأ أثناء إنشاء المدرس"
+      );
     } finally {
       setLoadingCreate(false);
     }
@@ -221,25 +178,13 @@ const Teachers = () => {
 
       setLoadingRestoreTeacher(true);
 
-      const teacherRef = doc(DB, "teachers", selectedRestoreTeacher.id);
-      const schoolAdminRef = doc(DB, "schoolAdmins", selectedRestoreTeacher.username);
-
-      await runTransaction(DB, async (transaction) => {
-
-        // ✅ Restore teacher
-        transaction.update(teacherRef, {
-          account_deleted: false,
-          is_active: true,
-          deleted_at: null,
-        });
-
-        // ✅ Unban login
-        transaction.update(schoolAdminRef, {
-          account_banned: false,
-          banned_at: null,
-        });
-
+      await rpc("set_staff_deleted", {
+        p_kind: "teacher",
+        p_id: selectedRestoreTeacher.id,
+        p_deleted: false,
       });
+
+      await refresh();
 
       alert("تم استرجاع حساب المدرس بنجاح");
 
@@ -256,6 +201,19 @@ const Teachers = () => {
 
   return (
     <div className="students-container">
+      <Modal
+        title="بيانات دخول المدرس"
+        open={!!credentials}
+        onCancel={() => setCredentials(null)}
+        footer={null}
+        centered
+      >
+        <div style={{ textAlign: "center", direction: "ltr" }}>
+          <p>رقم الدخول: <strong>{credentials?.username}</strong></p>
+          <p>كلمة المرور: <strong>{credentials?.password}</strong></p>
+          <p style={{ color: "gray", fontSize: 13, direction: "rtl" }}>احفظ كلمة المرور الآن، لا يمكن عرضها مرة أخرى.</p>
+        </div>
+      </Modal>
       <div className="students-header">
         <h2>المدرسين</h2>
         <div style={{ display: "flex",flexDirection:'row-reverse', gap: 10 }}>

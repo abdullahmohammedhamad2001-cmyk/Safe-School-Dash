@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import {collection,getDocs,addDoc,updateDoc,doc,query,where,Timestamp} from "firebase/firestore";
-import { DB } from "../firebaseConfig";
+import { supabase } from "../supabaseClient";
 import { Modal } from "antd";
 import ClipLoader from "react-spinners/ClipLoader";
 import { FiEdit2 } from "react-icons/fi";
@@ -105,15 +104,17 @@ const BillingTemplatesPage = () => {
 
       const schoolId = localStorage.getItem("adminSchoolID");
 
-      const snap = await getDocs(
-        query(collection(DB, "billing_templates"), 
-        where("school_id", "==", schoolId))
-      );
+      if (!schoolId || schoolId === "ALL") {
+        setTemplates([]);
+        return;
+      }
 
-      const list = snap.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
+      const { data: list, error: listError } = await supabase
+        .from("billing_templates")
+        .select("*")
+        .eq("school_id", schoolId);
+
+      if (listError) throw listError;
 
       // ترقية القوالب الفارغة المحفوظة بالصيغة القديمة لتعمل مع نسخ التطبيق القديمة
       await Promise.all(
@@ -132,7 +133,11 @@ const BillingTemplatesPage = () => {
               grade_amounts: EMPTY_TEMPLATE_AMOUNTS,
               installments: [],
             };
-            await updateDoc(doc(DB, "billing_templates", t.id), patch);
+            const { error: patchError } = await supabase
+              .from("billing_templates")
+              .update(patch)
+              .eq("id", t.id);
+            if (patchError) throw patchError;
             Object.assign(t, patch);
           })
       );
@@ -219,7 +224,12 @@ const BillingTemplatesPage = () => {
 
       const schoolId = localStorage.getItem("adminSchoolID");
 
-      await addDoc(collection(DB, "billing_templates"), {
+      if (!schoolId || schoolId === "ALL") {
+        alert("لم يتم العثور على المدرسة");
+        return;
+      }
+
+      const { error: insertError } = await supabase.from("billing_templates").insert({
         school_id: schoolId,
         academic_year: academicYear,
         school_type: schoolType,
@@ -230,11 +240,12 @@ const BillingTemplatesPage = () => {
         ),
         installments: isEmpty ? [] : dueDates.map((d, i) => ({
           index: i + 1,
-          due_date: Timestamp.fromDate(new Date(d)),
+          due_date: new Date(d).toISOString(),
         })),
         is_active: true,
-        created_at: Timestamp.now(),
       });
+
+      if (insertError) throw insertError;
 
       alert("تم إنشاء القالب");
 
@@ -267,7 +278,7 @@ const BillingTemplatesPage = () => {
 
     const qty = editingTemplate.number_of_payments || 1;
     const dates = (editingTemplate.installments || []).map(inst =>
-      new Date(inst.due_date.seconds * 1000)
+      new Date(inst.due_date)
         .toISOString()
         .split("T")[0]
     );
@@ -331,21 +342,24 @@ const BillingTemplatesPage = () => {
           return;
         }
 
-        const ref = doc(DB, "billing_templates", editingTemplate.id);
+        const { error: updateError } = await supabase
+          .from("billing_templates")
+          .update({
+            school_type: schoolType,
+            is_empty: isEmpty,
+            number_of_payments: isEmpty ? 1 : quantity,
+            grade_amounts: isEmpty ? EMPTY_TEMPLATE_AMOUNTS : Object.fromEntries(
+              Object.entries(gradeAmounts).map(([k, v]) => [k, Number(v)])
+            ),
+            installments: isEmpty ? [] : dueDates.map((d, i) => ({
+              index: i + 1,
+              due_date: new Date(d).toISOString(),
+            })),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", editingTemplate.id);
 
-        await updateDoc(ref, {
-          school_type: schoolType,
-          is_empty: isEmpty,
-          number_of_payments: isEmpty ? 1 : quantity,
-          grade_amounts: isEmpty ? EMPTY_TEMPLATE_AMOUNTS : Object.fromEntries(
-            Object.entries(gradeAmounts).map(([k, v]) => [k, Number(v)])
-          ),
-          installments: isEmpty ? [] : dueDates.map((d, i) => ({
-            index: i + 1,
-            due_date: Timestamp.fromDate(new Date(d)),
-          })),
-          updated_at: Timestamp.now(),
-        });
+        if (updateError) throw updateError;
 
         alert("تم تحديث القالب");
 
@@ -424,7 +438,7 @@ const BillingTemplatesPage = () => {
             <div key={inst.index} className="installment-pill">
               <p>قسط {inst.index}</p>
               <p>-</p>
-              <p>{new Date(inst.due_date.seconds * 1000).toLocaleDateString("ar-EG")}</p>
+              <p>{new Date(inst.due_date).toLocaleDateString("ar-EG")}</p>
             </div>
           ))}
         </div>
@@ -1011,7 +1025,7 @@ export default BillingTemplatesPage;
 
     // Convert due dates
     const dates = t.installments.map(inst => {
-      const d = new Date(inst.due_date.seconds * 1000);
+      const d = new Date(inst.due_date);
       return d.toISOString().split("T")[0];
     });
 

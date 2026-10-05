@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import {collection,addDoc,Timestamp,getDocs,query,where,doc,writeBatch} from "firebase/firestore";
-import { DB } from "../firebaseConfig";
+import { supabase, rpc } from "../supabaseClient";
 import { useGlobalState } from "../globalState";
 import { useRouter } from "next/navigation";
 import ClipLoader from "react-spinners/ClipLoader";
@@ -12,7 +11,7 @@ import { Modal } from "antd";
 import "../app/style.css";
 
 const Classes = () => {
-  const { classes, students, loading } = useGlobalState();
+  const { classes, students, loading, refresh } = useGlobalState();
   const router = useRouter();
 
   const [levelFilter, setLevelFilter] = useState("all");
@@ -160,57 +159,52 @@ const Classes = () => {
       }
 
       const schoolId = localStorage.getItem("adminSchoolID");
-      if (!schoolId) {
+      if (!schoolId || schoolId === "ALL") {
         alert("لم يتم العثور على المدرسة");
         return;
       }
 
       const needsSpecialization = classLevel === "إعدادي";
+      const section = classSection.trim();
 
       //Build class name
       const className = needsSpecialization
         ? `${classGrade} ${classSpecialization} - ${classSection}`
         : `${classGrade} - ${classSection}`;
 
-      let q;
+      const exists = classes.some(
+        (c) =>
+          c.schoolId === schoolId &&
+          c.educationLevel === classLevel &&
+          c.grade === classGrade &&
+          c.section === section &&
+          (needsSpecialization ? c.specialization === classSpecialization : !c.specialization)
+      );
 
-      if (needsSpecialization) {
-        q = query(
-          collection(DB, "classes"),
-          where("schoolId", "==", schoolId),
-          where("educationLevel", "==", classLevel),
-          where("grade", "==", classGrade),
-          where("specialization", "==", classSpecialization),
-          where("section", "==", classSection.trim()),
-        );
-      } else {
-        q = query(
-          collection(DB, "classes"),
-          where("schoolId", "==", schoolId),
-          where("educationLevel", "==", classLevel),
-          where("grade", "==", classGrade),
-          where("section", "==", classSection.trim())
-        );
-      }
-
-      const snap = await getDocs(q);
-
-      if (!snap.empty) {
+      if (exists) {
         alert("هذا الصف موجود مسبقًا");
         return;
       }
 
-      // 🔥 Create class
-      await addDoc(collection(DB, "classes"), {
-        schoolId,
-        educationLevel: classLevel,
+      const { error } = await supabase.from("classes").insert({
+        school_id: schoolId,
+        education_level: classLevel,
         grade: classGrade,
-        section: classSection,
+        section,
         specialization: needsSpecialization ? classSpecialization : null,
         name: className,
         timetable: buildDefaultTimetable(),
-        createdAt: Timestamp.now(),
       });
+
+      if (error) {
+        if (error.code === "23505") {
+          alert("هذا الصف موجود مسبقًا");
+          return;
+        }
+        throw error;
+      }
+
+      await refresh();
 
       alert("تم إنشاء الصف بنجاح");
 
@@ -235,21 +229,16 @@ const Classes = () => {
     try {
       setDeletingClassId(cls.id);
 
-      const convSnap = await getDocs(
-        query(
-          collection(DB, "conversations"),
-          where("school_id", "==", cls.schoolId),
-          where("class_id", "==", cls.id)
-        )
-      );
+      await rpc("delete_class", { p_class: cls.id });
 
-      const batch = writeBatch(DB);
-      convSnap.docs.forEach((d) => batch.update(d.ref, { archived: true }));
-      batch.delete(doc(DB, "classes", cls.id));
-      await batch.commit();
+      await refresh();
     } catch (e) {
       console.error(e);
-      alert("فشل حذف الصف");
+      alert(
+        e.message?.includes("CLASS_HAS_STUDENTS")
+          ? "لا يمكن حذف صف يحتوي على طلاب. انقل الطلاب إلى صف آخر أولاً."
+          : "فشل حذف الصف"
+      );
     } finally {
       setDeletingClassId(null);
     }
