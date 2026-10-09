@@ -17,6 +17,7 @@ import {
 import { Doughnut, Bar } from "react-chartjs-2";
 import createGlobe from "cobe";
 import { supabase, clearSessionCache } from "../supabaseClient";
+import { useTheme } from "./ThemeProvider";
 import '../app/style.css';
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
@@ -26,6 +27,8 @@ const GOLD_LIGHT = "#d4af37";
 
 const Globe = () => {
   const canvasRef = useRef(null);
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const [logo, setLogo] = useState("");
   const [schoolName, setSchoolName] = useState("");
   useEffect(() => {
@@ -42,13 +45,13 @@ const Globe = () => {
       height: 320,
       phi: 0,
       theta: 0.3,
-      dark: 0,
+      dark: isDark ? 1 : 0,
       diffuse: 1.2,
       mapSamples: 16000,
-      mapBrightness: 6,
-      baseColor: [0.87, 0.76, 0.42],
+      mapBrightness: isDark ? 3 : 6,
+      baseColor: isDark ? [0.45, 0.33, 0.1] : [0.87, 0.76, 0.42],
       markerColor: [0.54, 0.38, 0.08],
-      glowColor: [0.97, 0.93, 0.82],
+      glowColor: isDark ? [0.2, 0.15, 0.05] : [0.97, 0.93, 0.82],
       markers: [],
       onRender(state) {
         state.phi = phi;
@@ -56,7 +59,7 @@ const Globe = () => {
       },
     });
     return () => globe.destroy();
-  }, []);
+  }, [isDark]);
   return (
     <>
       {schoolName && <h2 className="school-name-title">{schoolName}</h2>}
@@ -75,6 +78,11 @@ const Globe = () => {
 
 const Main = () => {
   const { students, teachers, employees, classes, bills, loading } = useGlobalState();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const sliceBorder = isDark ? "#14161a" : "#fff";
+  const chartText = isDark ? "#d1d5db" : "#666";
+  const chartGrid = isDark ? "#343a46" : "rgba(0,0,0,0.1)";
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -103,9 +111,9 @@ const Main = () => {
       data: [activeStudents.length, activeTeachers.length, activeEmployees.length],
       backgroundColor: [GOLD, "#d4af37", "#c8a96e"],
       borderWidth: 2,
-      borderColor: "#fff",
+      borderColor: sliceBorder,
     }],
-  }), [activeStudents.length, activeTeachers.length, activeEmployees.length]);
+  }), [activeStudents.length, activeTeachers.length, activeEmployees.length, sliceBorder]);
 
   const classBar = useMemo(() => {
     const countMap = {};
@@ -129,9 +137,9 @@ const Main = () => {
     });
     return {
       labels: ["مدفوع بالكامل", "مدفوع جزئياً", "غير مدفوع"],
-      datasets: [{ data: [paid, partial, unpaid], backgroundColor: ["#22c55e", GOLD_LIGHT, "#ef4444"], borderWidth: 2, borderColor: "#fff" }],
+      datasets: [{ data: [paid, partial, unpaid], backgroundColor: ["#22c55e", GOLD_LIGHT, "#ef4444"], borderWidth: 2, borderColor: sliceBorder }],
     };
-  }, [bills]);
+  }, [bills, sliceBorder]);
 
   const financeBar = useMemo(() => {
     let totalAmount = 0, totalPaid = 0;
@@ -142,11 +150,20 @@ const Main = () => {
     };
   }, [bills]);
 
-  const doughnutOpts = { responsive: true, plugins: { legend: { position: "bottom", labels: { font: { family: "inherit" } } } } };
-  const barOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } };
+  const doughnutOpts = { responsive: true, plugins: { legend: { position: "bottom", labels: { color: chartText, font: { family: "inherit" } } } } };
+  const barOpts = {
+    responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: chartText }, grid: { color: chartGrid } },
+      y: { beginAtZero: true, ticks: { precision: 0, color: chartText }, grid: { color: chartGrid } },
+    },
+  };
   const financeBarOpts = {
     responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-    scales: { y: { beginAtZero: true, ticks: { callback: v => v >= 1000000 ? (v/1000000).toFixed(1)+"م" : v >= 1000 ? (v/1000).toFixed(0)+"ك" : v } } },
+    scales: {
+      x: { ticks: { color: chartText }, grid: { color: chartGrid } },
+      y: { beginAtZero: true, grid: { color: chartGrid }, ticks: { color: chartText, callback: v => v >= 1000000 ? (v/1000000).toFixed(1)+"م" : v >= 1000 ? (v/1000).toFixed(0)+"ك" : v } },
+    },
   };
 
   return (
@@ -156,7 +173,7 @@ const Main = () => {
 
       {loggingOut && (
         <div className="page-loading-overlay">
-          <ClipLoader size={40} color="#000" />
+          <ClipLoader size={40} color="#b8862a" />
           <p>جاري تسجيل الخروج...</p>
         </div>
       )}

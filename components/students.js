@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { sortClasses } from "../lib/sortClasses";
 import ClipLoader from "react-spinners/ClipLoader";
 import { Modal } from "antd";
+import StudentsImport from "./StudentsImport";
 import "../app/style.css";
 
 const Students = () => {
@@ -17,6 +18,7 @@ const Students = () => {
   const [classFilter, setClassFilter] = useState("all");
   const [parentFilter, setParentFilter] = useState("all");
   const [openModal, setOpenModal] = useState(false);
+  const [openImport, setOpenImport] = useState(false);
   const [studentName, setStudentName] = useState("");
   const [studentParentName, setStudentParentName] = useState("");
   const [studentSex, setStudentSex] = useState("male");
@@ -245,8 +247,18 @@ const Students = () => {
           >
             <p>الطلاب المنقطعين</p>
           </div>
+
+          <div
+            className="create-btn"
+            style={{ background: "#15803d" }}
+            onClick={() => setOpenImport(true)}
+          >
+            <p>استيراد من Excel</p>
+          </div>
         </div>
       </div>
+
+      <StudentsImport open={openImport} onClose={() => setOpenImport(false)} />
 
       <Modal
         title="إنشاء حساب طالب"

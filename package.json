@@ -24,6 +24,7 @@
     "cobe": "^2.0.1",
     "dayjs": "^1.11.13",
     "dotenv": "^17.2.2",
+    "exceljs": "^4.4.0",
     "google-map-react": "^2.2.1",
     "haversine": "^1.1.1",
     "html2pdf.js": "^0.14.0",

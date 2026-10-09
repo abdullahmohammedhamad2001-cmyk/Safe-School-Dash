@@ -98,7 +98,7 @@ const Login = () => {
 
       {loading && (
         <div className="page-loading-overlay">
-          <ClipLoader size={40} color="#000" />
+          <ClipLoader size={40} color="#b8862a" />
           <p>جاري تسجيل الدخول...</p>
         </div>
       )}

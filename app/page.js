@@ -4,7 +4,8 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { loadSession } from "../supabaseClient";
 import ClipLoader from "react-spinners/ClipLoader";
-import {MdDashboard,MdPeople,MdSchool} from "react-icons/md";
+import {MdDashboard,MdPeople,MdSchool,MdDarkMode,MdLightMode} from "react-icons/md";
+import { useTheme } from "../components/ThemeProvider";
 import { PiBagSimpleFill } from "react-icons/pi";
 import { FaBook, FaCar } from "react-icons/fa";
 import { MdCreateNewFolder, MdDirectionsBus, MdAssessment } from "react-icons/md";
@@ -31,6 +32,7 @@ const Dashboard = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeSection, setActiveSection] = useState("الرئيسية");
   const [schoolLogo, setSchoolLogo] = useState("");
+  const { theme, toggleTheme } = useTheme();
   const router = useRouter();
 
   useEffect(() => {
@@ -147,6 +149,13 @@ const Dashboard = () => {
               </div>
             );
           })}
+        </div>
+
+        <div className="sidebar-footer">
+          <div className="sidebar-link" onClick={toggleTheme}>
+            {theme === "dark" ? <MdLightMode size={18} /> : <MdDarkMode size={18} />}
+            {theme === "dark" ? "الوضع النهاري" : "الوضع الليلي"}
+          </div>
         </div>
       </aside>
 
