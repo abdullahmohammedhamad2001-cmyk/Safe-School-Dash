@@ -2641,3 +2641,11 @@ input, select, textarea {
 /* Theme toggle */
 .sidebar-footer { padding: 10px; border-top: 1px solid var(--border); }
 .sidebar-footer .sidebar-link { margin-bottom: 0; }
+
+/* The transport report is a paper document: keep it light so its PDF export is never dark */
+.transport-report {
+  --bg: #fff; --bg-soft: #f8fafc; --bg-muted: #f1f5f9; --border: #e5e7eb; --border-soft: #f1f5f9;
+  --text: #111827; --text-muted: #6b7280;
+  background: #fff;
+  color: #111827;
+}

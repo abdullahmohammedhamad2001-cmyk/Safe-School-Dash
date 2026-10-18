@@ -8,6 +8,7 @@ import { sortClasses } from "../lib/sortClasses";
 import ClipLoader from "react-spinners/ClipLoader";
 import { Modal } from "antd";
 import StudentsImport from "./StudentsImport";
+import StudentsExport from "./StudentsExport";
 import "../app/style.css";
 
 const Students = () => {
@@ -19,6 +20,7 @@ const Students = () => {
   const [parentFilter, setParentFilter] = useState("all");
   const [openModal, setOpenModal] = useState(false);
   const [openImport, setOpenImport] = useState(false);
+  const [openExport, setOpenExport] = useState(false);
   const [studentName, setStudentName] = useState("");
   const [studentParentName, setStudentParentName] = useState("");
   const [studentSex, setStudentSex] = useState("male");
@@ -255,10 +257,19 @@ const Students = () => {
           >
             <p>استيراد من Excel</p>
           </div>
+
+          <div
+            className="create-btn"
+            style={{ background: "#2563a7" }}
+            onClick={() => setOpenExport(true)}
+          >
+            <p>تصدير الطلاب</p>
+          </div>
         </div>
       </div>
 
       <StudentsImport open={openImport} onClose={() => setOpenImport(false)} />
+      <StudentsExport open={openExport} onClose={() => setOpenExport(false)} />
 
       <Modal
         title="إنشاء حساب طالب"
