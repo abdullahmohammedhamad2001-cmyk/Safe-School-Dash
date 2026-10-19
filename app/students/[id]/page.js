@@ -37,7 +37,7 @@ const StudentDetails = () => {
     const [selectedNextClass, setSelectedNextClass] = useState("");
     const [isGraduated, setIsGraduated] = useState(false);
     const [loadingPromotion, setLoadingPromotion] = useState(false);
-
+    const [registrationNote, setRegistrationNote] = useState(null);
     //Academic year
     const getAcademicYearAuto = () => {
         const today = new Date();
@@ -57,6 +57,18 @@ const StudentDetails = () => {
         const cls = classes.find((c) => c.id === student?.class_id);
         return cls?.name || "-";
     }, [classes, student]);
+
+    //Driver notes the family wrote in the public registration form
+    useEffect(() => {
+        if (!id) return;
+
+        supabase
+            .from("student_registration_notes")
+            .select("driver_name, driver_phone, driver_relation")
+            .eq("student_id", id)
+            .maybeSingle()
+            .then(({ data }) => setRegistrationNote(data || null));
+    }, [id]);
 
     //Fetch student yearly results
     useEffect(() => {
@@ -485,6 +497,20 @@ const StudentDetails = () => {
                     />
                 </div>
             </div>
+
+            {registrationNote && (
+                <div className="card">
+                    <div className="card-header">
+                        <h3>ملاحظات التسجيل (بيانات السائق)</h3>
+                    </div>
+
+                    <div className="card-content details-grid">
+                        <Detail label="اسم السائق" value={registrationNote.driver_name} />
+                        <Detail label="رقم السائق" value={registrationNote.driver_phone} />
+                        <Detail label="صلة القرابة بالسائق" value={registrationNote.driver_relation} />
+                    </div>
+                </div>
+            )}
 
             <div className="card">
                 <div className="card-result-header">

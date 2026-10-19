@@ -9,6 +9,7 @@ import ClipLoader from "react-spinners/ClipLoader";
 import { Modal } from "antd";
 import StudentsImport from "./StudentsImport";
 import StudentsExport from "./StudentsExport";
+import RegistrationControl from "./RegistrationControl";
 import "../app/style.css";
 
 const Students = () => {
@@ -21,6 +22,8 @@ const Students = () => {
   const [openModal, setOpenModal] = useState(false);
   const [openImport, setOpenImport] = useState(false);
   const [openExport, setOpenExport] = useState(false);
+  const [openRegistration, setOpenRegistration] = useState(false);
+  const [isSchoolAdmin, setIsSchoolAdmin] = useState(false);
   const [studentName, setStudentName] = useState("");
   const [studentParentName, setStudentParentName] = useState("");
   const [studentSex, setStudentSex] = useState("male");
@@ -92,6 +95,11 @@ const Students = () => {
         : `${year - 1}-${year}`;  // before → current year
 
     setAcademicYear(defaultYear);
+  }, []);
+
+  useEffect(() => {
+    const schoolId = localStorage.getItem("adminSchoolID");
+    setIsSchoolAdmin(!!schoolId && schoolId !== "ALL");
   }, []);
 
   //Open create new student modal
@@ -237,7 +245,7 @@ const Students = () => {
       <div className="students-header">
         <h2>الطلاب</h2>
 
-        <div style={{ display: "flex",flexDirection:'row-reverse', gap: 10 }}>
+        <div style={{ display: "flex",flexDirection:'row-reverse', flexWrap: "wrap", gap: 10 }}>
           <div className="create-btn" onClick={openCreateModal}>
             <p>+ إنشاء حساب طالب</p>
           </div>
@@ -265,11 +273,22 @@ const Students = () => {
           >
             <p>تصدير الطلاب</p>
           </div>
+
+          {isSchoolAdmin && (
+            <div
+              className="create-btn"
+              style={{ background: "#7c3aed" }}
+              onClick={() => setOpenRegistration(true)}
+            >
+              <p>استمارة التسجيل</p>
+            </div>
+          )}
         </div>
       </div>
 
       <StudentsImport open={openImport} onClose={() => setOpenImport(false)} />
       <StudentsExport open={openExport} onClose={() => setOpenExport(false)} />
+      {isSchoolAdmin && <RegistrationControl open={openRegistration} onClose={() => setOpenRegistration(false)} />}
 
       <Modal
         title="إنشاء حساب طالب"

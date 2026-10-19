@@ -2649,3 +2649,36 @@ input, select, textarea {
   background: #fff;
   color: #111827;
 }
+
+/* Public student registration form */
+.reg-page { min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; padding: 24px 12px; background: var(--bg-soft); }
+.reg-card { width: 100%; max-width: 520px; background: var(--bg); border: 1px solid var(--border); border-radius: 16px; padding: 24px 20px; display: flex; flex-direction: column; gap: 14px; }
+.reg-logos { display: flex; justify-content: space-between; align-items: center; }
+.reg-logos img { width: 72px; height: 72px; object-fit: contain; }
+.reg-title { margin: 0; text-align: center; font-size: 20px; font-weight: bold; }
+.reg-subtitle { margin: 0; text-align: center; color: var(--school-gold); font-weight: bold; font-size: 15px; }
+.reg-section { margin: 8px 0 0; font-size: 16px; border-bottom: 2px solid var(--school-gold-border); padding-bottom: 6px; }
+.reg-muted { margin: 0; color: var(--text-muted); font-size: 13px; line-height: 1.8; }
+.reg-note { margin-top: -6px; }
+.reg-form { display: flex; flex-direction: column; gap: 12px; }
+.reg-form input, .reg-form select { padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; direction: rtl; width: 100%; box-sizing: border-box; }
+.reg-form select:disabled { opacity: 0.55; }
+.reg-phone { display: flex; flex-direction: row-reverse; align-items: center; gap: 8px; }
+.reg-phone span { color: var(--text-muted); font-size: 14px; }
+.reg-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.reg-error { margin: 0; color: var(--red-text); font-size: 14px; text-align: center; }
+.reg-alert { background: var(--amber-bg); color: var(--amber-text); padding: 12px; border-radius: 10px; text-align: center; font-weight: bold; font-size: 14px; }
+.reg-done { display: flex; flex-direction: column; gap: 12px; align-items: stretch; text-align: center; }
+.reg-success { background: var(--green-bg); color: var(--green-text); padding: 12px; border-radius: 10px; font-weight: bold; }
+.reg-student-name { margin: 0; font-size: 18px; font-weight: bold; }
+.reg-warning { background: var(--red-bg); color: var(--red-text); padding: 12px; border-radius: 10px; font-size: 14px; font-weight: bold; line-height: 1.8; }
+.reg-code { background: var(--bg-muted); border: 2px dashed var(--school-gold-border); border-radius: 10px; padding: 14px 8px; font-size: 15px; font-weight: bold; text-align: center; word-break: break-all; user-select: all; }
+.reg-actions { display: flex; gap: 10px; }
+.reg-actions .create-submit { flex: 1; padding: 10px 8px; }
+.reg-secondary { background: #64748b; }
+.reg-add { padding: 12px; }
+.reg-link { background: none; border: none; color: var(--school-gold); cursor: pointer; font-size: 13px; text-decoration: underline; }
+.reg-list { display: flex; flex-direction: column; gap: 12px; }
+.reg-saved { border: 1px solid var(--border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.reg-saved-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.reg-badge { background: var(--green-bg); color: var(--green-text); border-radius: 20px; padding: 2px 10px; font-size: 12px; font-weight: bold; white-space: nowrap; }

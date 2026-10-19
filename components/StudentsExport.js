@@ -4,6 +4,7 @@ import React, { useMemo, useState } from "react";
 import { Modal } from "antd";
 import ClipLoader from "react-spinners/ClipLoader";
 import { useGlobalState } from "../globalState";
+import { fetchAll } from "../supabaseClient";
 import { sortClasses } from "../lib/sortClasses";
 import { exportStudentsExcel, exportStudentsPdf } from "../lib/studentsExport";
 
@@ -13,6 +14,7 @@ const StudentsExport = ({ open, onClose }) => {
   const [classId, setClassId] = useState("all");
   const [linkFilter, setLinkFilter] = useState("all");
   const [format, setFormat] = useState("xlsx");
+  const [withDriver, setWithDriver] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   const sortedClasses = useMemo(() => sortClasses(classes), [classes]);
@@ -43,8 +45,20 @@ const StudentsExport = ({ open, onClose }) => {
 
     try {
       setExporting(true);
-      if (format === "pdf") await exportStudentsPdf(rows, { title, schoolName, fileName });
-      else await exportStudentsExcel(rows, { title, fileName });
+
+      let exportRows = rows;
+      if (withDriver) {
+        const notes = new Map((await fetchAll("student_registration_notes", "*", "student_id")).map((n) => [n.student_id, n]));
+        exportRows = rows.map((r) => ({
+          ...r,
+          driver_name: notes.get(r.code)?.driver_name,
+          driver_phone: notes.get(r.code)?.driver_phone,
+          driver_relation: notes.get(r.code)?.driver_relation,
+        }));
+      }
+
+      if (format === "pdf") await exportStudentsPdf(exportRows, { title, schoolName, fileName, withDriver });
+      else await exportStudentsExcel(exportRows, { title, fileName, withDriver });
     } catch (e) {
       console.error("Export students failed:", e);
       alert("فشل تصدير الملف");
@@ -81,6 +95,11 @@ const StudentsExport = ({ open, onClose }) => {
             <option value="pdf">PDF</option>
           </select>
         </div>
+
+        <label style={{ display: "flex", flexDirection: "row-reverse", justifyContent: "flex-end", gap: 8, fontSize: 14, cursor: "pointer" }}>
+          إضافة بيانات السائق (من استمارة التسجيل)
+          <input type="checkbox" checked={withDriver} onChange={(e) => setWithDriver(e.target.checked)} />
+        </label>
 
         <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>
           عدد الطلاب في التصدير: {rows.length}
