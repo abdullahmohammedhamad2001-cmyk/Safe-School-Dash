@@ -8,7 +8,7 @@ import ClipLoader from "react-spinners/ClipLoader";
 import { FaRegTrashCan } from "react-icons/fa6";
 import { sortClasses, EDUCATION_ORDER, GRADE_ORDER } from "../lib/sortClasses";
 import { Modal } from "antd";
-import TimetableImport from "./TimetableImport";
+import TimetableBuilder from "./TimetableBuilder";
 import "../app/style.css";
 
 const Classes = () => {
@@ -18,7 +18,7 @@ const Classes = () => {
   const [levelFilter, setLevelFilter] = useState("all");
   const [gradeFilter, setGradeFilter] = useState("all");
   const [openModal, setOpenModal] = useState(false);
-  const [openTimetableImport, setOpenTimetableImport] = useState(false);
+  const [openTimetable, setOpenTimetable] = useState(false);
   const [classLevel, setClassLevel] = useState("");
   const [classGrade, setClassGrade] = useState("");
   const [classSection, setClassSection] = useState("");
@@ -257,14 +257,14 @@ const Classes = () => {
           <div
             className="create-btn"
             style={{ background: "#15803d" }}
-            onClick={() => setOpenTimetableImport(true)}
+            onClick={() => setOpenTimetable(true)}
           >
-            <p>استيراد جدول الحصص</p>
+            <p>جدول الحصص</p>
           </div>
         </div>
       </div>
 
-      <TimetableImport open={openTimetableImport} onClose={() => setOpenTimetableImport(false)} />
+      <TimetableBuilder open={openTimetable} onClose={() => setOpenTimetable(false)} />
 
       <Modal
         title="إنشاء صف"

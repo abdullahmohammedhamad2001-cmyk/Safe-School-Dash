@@ -2682,3 +2682,25 @@ input, select, textarea {
 .reg-saved { border: 1px solid var(--border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .reg-saved-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .reg-badge { background: var(--green-bg); color: var(--green-text); border-radius: 20px; padding: 2px 10px; font-size: 12px; font-weight: bold; white-space: nowrap; }
+
+/* Class timetable form */
+.tt-builder { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+.tt-toolbar { display: flex; gap: 12px; flex-wrap: wrap; }
+.tt-toolbar .input-group { min-width: 240px; flex: 1; }
+.tt-toolbar select { padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; direction: rtl; }
+.tt-message { margin: 0; padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; }
+.tt-ok { background: var(--green-bg); color: var(--green-text); }
+.tt-error { background: var(--red-bg); color: var(--red-text); }
+.tt-wrap { max-height: 62vh; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+.tt-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tt-table th, .tt-table td { border: 1px solid var(--border); padding: 4px; text-align: center; vertical-align: top; }
+.tt-table th { position: sticky; top: 0; background: var(--bg-soft); z-index: 1; padding: 8px 4px; }
+.tt-table select, .tt-table input { width: 100%; box-sizing: border-box; padding: 4px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; margin-bottom: 3px; direction: rtl; }
+.tt-period { font-weight: bold; width: 44px; vertical-align: middle !important; }
+.tt-time { width: 108px; }
+.tt-clash { background: var(--red-bg); }
+.tt-missing { border-color: var(--red-text) !important; }
+.tt-actions { display: flex; flex-direction: row-reverse; gap: 10px; align-items: center; }
+.tt-actions .create-submit { padding: 10px 18px; }
+.tt-actions .create-submit:disabled { background: #9ca3af; cursor: not-allowed; }
+.tt-secondary { background: #64748b; }
