@@ -8,7 +8,7 @@ import { useGlobalState } from "../globalState";
 import { sortClasses } from "../lib/sortClasses";
 import {
   DAY_LABELS, SCHOOL_DAYS, MAX_PERIODS, emptyBell, isoToMinutes, timeToMinutes,
-  loadGrid, gridProblem, buildTimetable, diffCombos,
+  loadGrid, gridProblem, buildTimetable, diffCombos, isTeacherOptional,
 } from "../lib/timetableForm";
 
 const bellKey = (schoolId) => `timetableBell:${schoolId}`;
@@ -30,7 +30,7 @@ const TimetableBuilder = ({ open, onClose }) => {
   const activeTeachers = useMemo(() => teachers.filter((t) => !t.account_deleted), [teachers]);
 
   const subjectOptions = useMemo(() => {
-    const names = new Set();
+    const names = new Set(["التربية الفنية", "الجرائم"]);
     activeTeachers.forEach((t) => Object.values(t.subjects || {}).forEach((s) => names.add(s.name)));
     return [...names].sort((a, b) => a.localeCompare(b, "ar"));
   }, [activeTeachers]);
@@ -208,7 +208,7 @@ const TimetableBuilder = ({ open, onClose }) => {
     }
   };
 
-  const noTeachers = subjectOptions.length === 0;
+  const noTeachers = activeTeachers.length === 0;
 
   return (
     <Modal
@@ -222,7 +222,7 @@ const TimetableBuilder = ({ open, onClose }) => {
     >
       <div className="tt-builder" dir="rtl">
         {noTeachers && (
-          <p className="tt-message tt-error">لا يوجد مدرسون مسجّلون. أضف المدرسين ومواد تدريسهم من تبويب المدرسين أولاً.</p>
+          <p className="tt-message tt-error">لا يوجد مدرسون مسجّلون لبقية المواد.</p>
         )}
 
         <div className="tt-toolbar">
@@ -278,9 +278,9 @@ const TimetableBuilder = ({ open, onClose }) => {
                               <select
                                 value={cell.teacherId || ""}
                                 onChange={(e) => setCell(p, d, { teacherId: e.target.value })}
-                                className={cell.teacherId ? "" : "tt-missing"}
+                                className={cell.teacherId || isTeacherOptional(cell.subject) ? "" : "tt-missing"}
                               >
-                                <option value="">اختر المدرس</option>
+                                <option value="">{isTeacherOptional(cell.subject) ? "بدون مدرس (اختياري)" : "اختر المدرس"}</option>
                                 {teachersFor(cell.subject).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                               </select>
                             )}
@@ -302,7 +302,7 @@ const TimetableBuilder = ({ open, onClose }) => {
               {saving ? (
                 <ClipLoader size={20} color="#b8860b" />
               ) : (
-                <button type="button" className="create-submit" onClick={handleSave} disabled={noTeachers}>
+                <button type="button" className="create-submit" onClick={handleSave}>
                   حفظ الجدول
                 </button>
               )}

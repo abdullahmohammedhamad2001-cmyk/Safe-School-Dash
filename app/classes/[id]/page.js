@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import {useGlobalState} from '../../../globalState';
 import { supabase, rpc } from "../../../supabaseClient";
 import {sortClasses} from '../../../lib/sortClasses'
+import { isTeacherOptional } from '../../../lib/timetableForm';
 import { Modal } from "antd";
 import ClipLoader from "react-spinners/ClipLoader";
 import { FiEdit2 } from "react-icons/fi";
@@ -54,6 +55,7 @@ const TimetableSection = ({ classData, teachers,students }) => {
         "التربية الإسلامية",
         "التربية الوطنية",
         "الاجتماعيات",
+        "الجرائم",
         "التربية الفنية",
         "التربية الرياضية",
         "الحاسوب",
@@ -99,7 +101,7 @@ const TimetableSection = ({ classData, teachers,students }) => {
     //Check is subject exist
     const doesSubjectExist = (timetable, subject) => {
         return timetable.some(day =>
-            day.sessions.some(s => s.subject === subject)
+            day.sessions.some(s => s.subject === subject && s.teacher_id)
         );
     };
 
@@ -113,7 +115,7 @@ const TimetableSection = ({ classData, teachers,students }) => {
                 return;
             }
 
-            if (!newSession.subject || !newSession.teacher_id) {
+            if (!newSession.subject || (!newSession.teacher_id && !isTeacherOptional(newSession.subject))) {
                 alert("يرجى إدخال جميع البيانات");
                 return;
             }
@@ -160,12 +162,14 @@ const TimetableSection = ({ classData, teachers,students }) => {
             if (error) throw error;
 
             // Links the teacher's subject to this class and opens the subject chat on its first session
-            await rpc("class_session_added", {
-                p_class: classData.id,
-                p_subject: newSession.subject,
-                p_teacher: newSession.teacher_id,
-                p_first_for_subject: !subjectExists,
-            });
+            if (newSession.teacher_id) {
+                await rpc("class_session_added", {
+                    p_class: classData.id,
+                    p_subject: newSession.subject,
+                    p_teacher: newSession.teacher_id,
+                    p_first_for_subject: !subjectExists,
+                });
+            }
 
             await refresh();
 
@@ -400,7 +404,7 @@ const TimetableSection = ({ classData, teachers,students }) => {
                                 setNewSession({ ...newSession, teacher_id: e.target.value })
                             }
                         >
-                            <option value="">اختر المعلم</option>
+                            <option value="">{isTeacherOptional(newSession.subject) ? "بدون مدرس (اختياري)" : "اختر المعلم"}</option>
                             {getTeachersBySubject(newSession.subject).map((t) => (
                                 <option key={t.id} value={t.id}>
                                     {t.name}
