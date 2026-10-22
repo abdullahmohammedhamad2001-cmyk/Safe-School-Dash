@@ -1,14 +1,13 @@
 import React from 'react'
 import './style.css'
-import { Cairo } from 'next/font/google'
+import '@fontsource/cairo/latin-400.css'
+import '@fontsource/cairo/latin-700.css'
+import '@fontsource/cairo/arabic-400.css'
+import '@fontsource/cairo/arabic-700.css'
 import { GlobalStateProvider } from '../globalState'
 import { ThemeProvider } from '../components/ThemeProvider'
 
-const cairo = Cairo({
-  subsets: ['latin', 'arabic'],
-  weight:['400','700'],
-  display:'swap'
-})
+const cairoStyle = { fontFamily: "'Cairo', sans-serif" }
 
 export const metadata = {
   title: "SAFE",
@@ -21,7 +20,7 @@ const themeScript = `(function(){try{var t=localStorage.getItem('dashboardTheme'
 
 export default function RootLayout({children}) {
   return (
-    <html lang="en" className={cairo.className} suppressHydrationWarning>
+    <html lang="en" style={cairoStyle} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
