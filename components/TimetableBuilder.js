@@ -8,7 +8,7 @@ import { useGlobalState } from "../globalState";
 import { sortClasses } from "../lib/sortClasses";
 import {
   DAY_LABELS, SCHOOL_DAYS, MAX_PERIODS, emptyBell, isoToMinutes, timeToMinutes,
-  loadGrid, gridProblem, buildTimetable, diffCombos, isTeacherOptional,
+  loadGrid, gridProblem, buildTimetable, diffCombos, isTeacherOptional, fillMissingTeachers,
 } from "../lib/timetableForm";
 
 const bellKey = (schoolId) => `timetableBell:${schoolId}`;
@@ -37,6 +37,19 @@ const TimetableBuilder = ({ open, onClose }) => {
 
   const teachersFor = (subject) =>
     activeTeachers.filter((t) => Object.values(t.subjects || {}).some((s) => s.name === subject));
+
+  useEffect(() => {
+    if (open) void refresh();
+  }, [open, refresh]);
+
+  useEffect(() => {
+    if (!open) return;
+    const next = fillMissingTeachers(grid, activeTeachers);
+    if (next !== grid) {
+      setGrid(next);
+      setDirty(true);
+    }
+  }, [open, grid, activeTeachers]);
 
   // The bell schedule is the same for the whole school, so it is remembered on this device
   useEffect(() => {
