@@ -8,6 +8,7 @@ import ClipLoader from "react-spinners/ClipLoader";
 import { FaRegTrashCan } from "react-icons/fa6";
 import { sortClasses, EDUCATION_ORDER, GRADE_ORDER } from "../lib/sortClasses";
 import { Modal } from "antd";
+import TimetableImport from "./TimetableImport";
 import "../app/style.css";
 
 const Classes = () => {
@@ -17,6 +18,7 @@ const Classes = () => {
   const [levelFilter, setLevelFilter] = useState("all");
   const [gradeFilter, setGradeFilter] = useState("all");
   const [openModal, setOpenModal] = useState(false);
+  const [openTimetableImport, setOpenTimetableImport] = useState(false);
   const [classLevel, setClassLevel] = useState("");
   const [classGrade, setClassGrade] = useState("");
   const [classSection, setClassSection] = useState("");
@@ -248,10 +250,21 @@ const Classes = () => {
     <div className="students-container">
       <div className="students-header">
         <h2>الصفوف</h2>
-        <div className="create-btn" onClick={openCreateModal}>
-          <p>+ إنشاء صف</p>
+        <div style={{ display: "flex", flexDirection: "row-reverse", flexWrap: "wrap", gap: 10 }}>
+          <div className="create-btn" onClick={openCreateModal}>
+            <p>+ إنشاء صف</p>
+          </div>
+          <div
+            className="create-btn"
+            style={{ background: "#15803d" }}
+            onClick={() => setOpenTimetableImport(true)}
+          >
+            <p>استيراد جدول الحصص</p>
+          </div>
         </div>
       </div>
+
+      <TimetableImport open={openTimetableImport} onClose={() => setOpenTimetableImport(false)} />
 
       <Modal
         title="إنشاء صف"
