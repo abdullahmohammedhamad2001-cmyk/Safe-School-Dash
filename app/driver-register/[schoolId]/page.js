@@ -36,6 +36,76 @@ const normalizePhone = (value) => {
 
 const emptyForm = { name: "", phone: "", carType: "", carPlate: "", carSeats: "", website: "" };
 
+const MAX_SIDE = 1600;
+
+// Phone cameras produce photos over the upload limit, so they are shrunk in the browser; the original is kept if it can't be decoded
+const shrinkImage = (file) =>
+  new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(
+        (blob) => {
+          URL.revokeObjectURL(url);
+          resolve(blob ? new File([blob], "photo.jpg", { type: "image/jpeg" }) : file);
+        },
+        "image/jpeg",
+        0.85
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(file);
+    };
+    img.src = url;
+  });
+
+// Gallery and camera are separate buttons: a label opens the hidden input reliably on phones, unlike a styled native file field
+const ImagePicker = ({ label, file, onChange, facing }) => {
+  const [preview, setPreview] = useState("");
+
+  useEffect(() => {
+    if (!file) {
+      setPreview("");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  const pick = async (e) => {
+    const chosen = e.target.files?.[0];
+    e.target.value = "";
+    if (chosen) onChange(await shrinkImage(chosen));
+  };
+
+  return (
+    <div className="input-group">
+      <label>{label}</label>
+      {preview && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img className="reg-file-preview" src={preview} alt={label} />
+      )}
+      <div className="reg-file-actions">
+        <label className="reg-file-btn">
+          <input type="file" accept="image/*" onChange={pick} />
+          {file ? "تغيير من المعرض" : "اختيار من المعرض"}
+        </label>
+        <label className="reg-file-btn">
+          <input type="file" accept="image/*" capture={facing} onChange={pick} />
+          التقاط صورة
+        </label>
+      </div>
+    </div>
+  );
+};
+
 const DriverRegister = () => {
   const { schoolId } = useParams();
   const tokenKey = `driverRegistration:${schoolId}`;
@@ -327,10 +397,7 @@ const DriverRegister = () => {
               </div>
             </div>
 
-            <div className="input-group">
-              <label>صورة السائق</label>
-              <input type="file" accept="image/*" onChange={(e) => setPersonalImage(e.target.files[0] || null)} />
-            </div>
+            <ImagePicker label="صورة السائق" file={personalImage} onChange={setPersonalImage} facing="user" />
 
             <h3 className="reg-section">بيانات السيارة</h3>
 
@@ -352,10 +419,7 @@ const DriverRegister = () => {
               <input type="number" min={1} max={100} value={form.carSeats} onChange={set("carSeats")} />
             </div>
 
-            <div className="input-group">
-              <label>صورة السيارة</label>
-              <input type="file" accept="image/*" onChange={(e) => setCarImage(e.target.files[0] || null)} />
-            </div>
+            <ImagePicker label="صورة السيارة" file={carImage} onChange={setCarImage} facing="environment" />
 
             {/* Hidden field that real users never see; bots that fill it are rejected */}
             <input

@@ -2717,3 +2717,9 @@ input, select, textarea {
 .dr-info { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 200px; }
 .dr-info small { color: var(--text-muted); }
 .dr-actions { display: flex; gap: 8px; align-items: center; }
+
+/* Image pickers on the public driver form */
+.reg-form .reg-file-actions { display: flex; gap: 8px; }
+.reg-form .reg-file-btn { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; padding: 12px 8px; min-height: 44px; border: 1px dashed var(--school-gold-border); border-radius: 10px; background: var(--bg-muted); color: var(--text); font-size: 14px; font-weight: bold; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.reg-form .reg-file-btn input { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; overflow: hidden; }
+.reg-form .reg-file-preview { width: 100%; max-height: 200px; object-fit: contain; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-muted); }
