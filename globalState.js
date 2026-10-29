@@ -6,7 +6,7 @@ import { supabase, fetchAll, publicUrl } from "./supabaseClient";
 
 const GlobalStateContext = createContext();
 
-const PUBLIC_PATHS = ["/login", "/register"];
+const PUBLIC_PATHS = ["/login", "/register", "/driver-register"];
 
 const initialState = {
   students: [],

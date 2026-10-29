@@ -6,6 +6,8 @@ import { useGlobalState } from "../globalState";
 import { useRouter } from "next/navigation";
 import ClipLoader from "react-spinners/ClipLoader";
 import { Modal } from "antd";
+import DriverRequests from "./DriverRequests";
+import DriverRegistrationControl from "./DriverRegistrationControl";
 import "../app/style.css";
 
 const CAR_TYPES = [
@@ -39,6 +41,9 @@ const Drivers = () => {
   const [loadingCreate, setLoadingCreate] = useState(false);
   const [newDriverCredentials, setNewDriverCredentials] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [tab, setTab] = useState("drivers");
+  const [pendingCount, setPendingCount] = useState(0);
+  const [openRegistration, setOpenRegistration] = useState(false);
 
   const filteredDrivers = useMemo(
     () => drivers.filter((d) => !nameFilter || d.name?.includes(nameFilter)),
@@ -143,11 +148,13 @@ const Drivers = () => {
       // Do not leave orphaned images behind
       if (uploadedPaths.length) await media.remove(uploadedPaths);
 
-      alert(
-        error.message === "phone_in_use" || error.message === "login_in_use"
-          ? "رقم الهاتف مستخدم بالفعل"
-          : "حدث خطأ أثناء إنشاء السائق"
-      );
+      // A driver of another school with this number can't be seen here, so the upload is refused
+      const phoneTaken =
+        error.message === "phone_in_use" ||
+        error.message === "login_in_use" ||
+        /row-level security/i.test(error.message || "");
+
+      alert(phoneTaken ? "رقم الهاتف مستخدم بالفعل" : "حدث خطأ أثناء إنشاء السائق");
     } finally {
       setLoadingCreate(false);
     }
@@ -193,10 +200,28 @@ const Drivers = () => {
     <div className="students-container">
       <div className="students-header">
         <h2>السواق</h2>
-        <div className="create-btn" onClick={() => setOpenModal(true)}>
-          <p>+ إنشاء حساب سائق</p>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <div className="create-btn" onClick={() => setOpenRegistration(true)}>
+            <p>استمارة تسجيل السواق</p>
+          </div>
+          <div className="create-btn" onClick={() => setOpenModal(true)}>
+            <p>+ إنشاء حساب سائق</p>
+          </div>
         </div>
       </div>
+
+      <div className="dr-filters">
+        <button className={`dr-filter ${tab === "drivers" ? "active" : ""}`} onClick={() => setTab("drivers")}>
+          السائقون
+        </button>
+        <button className={`dr-filter ${tab === "requests" ? "active" : ""}`} onClick={() => setTab("requests")}>
+          طلبات التسجيل{pendingCount > 0 ? ` (${pendingCount})` : ""}
+        </button>
+      </div>
+
+      <DriverRegistrationControl open={openRegistration} onClose={() => setOpenRegistration(false)} />
+
+      <DriverRequests active={tab === "requests"} onPendingChange={setPendingCount} />
 
       <Modal
         title="إنشاء حساب سائق"
@@ -281,7 +306,7 @@ const Drivers = () => {
         </div>
       </Modal>
 
-      <div className="students-filters">
+      <div className="students-filters" style={{ display: tab === "drivers" ? undefined : "none" }}>
         <input
           placeholder="البحث باسم السائق..."
           value={nameFilter}
@@ -289,7 +314,7 @@ const Drivers = () => {
         />
       </div>
 
-      <div className="drivers-table">
+      <div className="drivers-table" style={{ display: tab === "drivers" ? undefined : "none" }}>
         <div className="drivers-table-header">
           <span>الاسم</span>
           <span>الهاتف</span>

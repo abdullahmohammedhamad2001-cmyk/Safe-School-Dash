@@ -30,9 +30,9 @@ export const imageError = (file) => {
     return null;
 };
 
-// Calls the account administration function (create teachers, employees, drivers, reset passwords).
-export const adminAccounts = async (body) => {
-    const { data, error } = await supabase.functions.invoke("admin-accounts", { body });
+// Calls an Edge Function; failures throw an Error whose message is the function's error code.
+const invokeFunction = async (name, body) => {
+    const { data, error } = await supabase.functions.invoke(name, { body });
 
     if (error) {
         let code = "request_failed";
@@ -44,6 +44,15 @@ export const adminAccounts = async (body) => {
 
     return data;
 };
+
+// Account administration function (create teachers, employees, drivers, reset passwords).
+export const adminAccounts = (body) => invokeFunction("admin-accounts", body);
+
+// Accept or reject a driver's registration request.
+export const driverRequests = (body) => invokeFunction("driver-requests", body);
+
+// Public driver registration form; body is a FormData with the photos.
+export const submitDriverRegistration = (formData) => invokeFunction("driver-registration", formData);
 
 // Calls a database function and throws an Error whose message is the function's error code.
 export const rpc = async (fn, args) => {
